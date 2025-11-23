@@ -229,6 +229,10 @@ router.get('/aggregated', requireAuth, async (req, res) => {
             antibodies: 0,
             ot_rooms: 0,
             general_beds: 0,
+            icu_beds: 0,
+            isolation_beds: 0,
+            oxygen_cylinders: 0,
+            dialysis_machines: 0,
             available_nurses_count: 0,
             instruments: [],
             ecg_machines: 0,
@@ -255,6 +259,10 @@ router.get('/aggregated', requireAuth, async (req, res) => {
         antibodies: 0,
         ot_rooms: 0,
         general_beds: 0,
+        icu_beds: 0,
+        isolation_beds: 0,
+        oxygen_cylinders: 0,
+        dialysis_machines: 0,
         available_nurses_count: 0,
         instruments: [],
         ecg_machines: 0,
@@ -307,6 +315,10 @@ router.get('/aggregated', requireAuth, async (req, res) => {
         aggregated.inventory.antibodies += inv.antibodies || 0;
         aggregated.inventory.ot_rooms += inv.ot_rooms || 0;
         aggregated.inventory.general_beds += inv.general_beds || 0;
+        aggregated.inventory.icu_beds += inv.icu_beds || 0;
+        aggregated.inventory.isolation_beds += inv.isolation_beds || 0;
+        aggregated.inventory.oxygen_cylinders += inv.oxygen_cylinders || 0;
+        aggregated.inventory.dialysis_machines += inv.dialysis_machines || 0;
         aggregated.inventory.available_nurses_count += inv.available_nurses_count || 0;
         aggregated.inventory.ecg_machines += inv.ecg_machines || 0;
         aggregated.inventory.ct_scan += inv.ct_scan || 0;

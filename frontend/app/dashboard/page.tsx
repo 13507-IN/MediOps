@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { getDocuments, deleteDocument, getAllocations, deallocateResources, checkStockLevels, type Document } from "@/lib/api"
+import { getDocuments, deleteDocument, getAllocations, deallocateResources, checkStockLevels, getAggregatedResources, type Document } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { ResourceAllocationForm } from "@/components/resource-allocation-form"
 
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const { toast } = useToast()
   const [documents, setDocuments] = useState<Document[]>([])
   const [allocations, setAllocations] = useState<any[]>([])
+  const [resources, setResources] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [allocationLoading, setAllocationLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -44,6 +45,7 @@ export default function Dashboard() {
     if (isAuthenticated && token) {
       fetchDocuments()
       fetchAllocations()
+      fetchResources()
       checkStock()
     }
   }, [isAuthenticated, token])
@@ -66,6 +68,19 @@ export default function Dashboard() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchResources = async () => {
+    try {
+      if (!token) return
+
+      const response = await getAggregatedResources(token)
+      if (response.success && response.data) {
+        setResources(response.data)
+      }
+    } catch (error) {
+      console.error("Error fetching resources:", error)
     }
   }
 
@@ -112,24 +127,153 @@ export default function Dashboard() {
 
   const checkStock = async () => {
     try {
-      if (!token) return
+      // Use aggregated resources data to check stock levels
+      if (!resources || !resources.inventory) return
 
-      const response = await checkStockLevels(token)
-      if (response.success && response.data?.lowStockItems) {
-        setLowStockItems(response.data.lowStockItems)
+      const inventory = resources.inventory
+      const alerts: any[] = []
+      const threshold = 5
 
-        if (response.data.lowStockItems.length > 0) {
-          const itemsList = response.data.lowStockItems
-            .slice(0, 3)
-            .map((item: any) => `${item.item}: ${item.count}`)
-            .join(", ")
+      // Check all inventory items for low stock
+      if (inventory.general_beds !== undefined && inventory.general_beds < threshold) {
+        alerts.push({
+          item: 'General Beds',
+          count: inventory.general_beds,
+          threshold,
+        })
+      }
+      if (inventory.icu_beds !== undefined && inventory.icu_beds < threshold) {
+        alerts.push({
+          item: 'ICU Beds',
+          count: inventory.icu_beds,
+          threshold,
+        })
+      }
+      if (inventory.isolation_beds !== undefined && inventory.isolation_beds < threshold) {
+        alerts.push({
+          item: 'Isolation Beds',
+          count: inventory.isolation_beds,
+          threshold,
+        })
+      }
+      if (inventory.ot_rooms !== undefined && inventory.ot_rooms < threshold) {
+        alerts.push({
+          item: 'OT Rooms',
+          count: inventory.ot_rooms,
+          threshold,
+        })
+      }
+      if (inventory.saline !== undefined && inventory.saline < threshold) {
+        alerts.push({
+          item: 'Saline',
+          count: inventory.saline,
+          threshold,
+        })
+      }
+      if (inventory.injections !== undefined && inventory.injections < threshold) {
+        alerts.push({
+          item: 'Injections',
+          count: inventory.injections,
+          threshold,
+        })
+      }
+      if (inventory.antibodies !== undefined && inventory.antibodies < threshold) {
+        alerts.push({
+          item: 'Antibodies',
+          count: inventory.antibodies,
+          threshold,
+        })
+      }
+      if (inventory.ecg_machines !== undefined && inventory.ecg_machines < threshold) {
+        alerts.push({
+          item: 'ECG Machines',
+          count: inventory.ecg_machines,
+          threshold,
+        })
+      }
+      if (inventory.ct_scan !== undefined && inventory.ct_scan < threshold) {
+        alerts.push({
+          item: 'CT Scan',
+          count: inventory.ct_scan,
+          threshold,
+        })
+      }
+      if (inventory.endoscopy !== undefined && inventory.endoscopy < threshold) {
+        alerts.push({
+          item: 'Endoscopy',
+          count: inventory.endoscopy,
+          threshold,
+        })
+      }
+      if (inventory.bp_machines !== undefined && inventory.bp_machines < threshold) {
+        alerts.push({
+          item: 'BP Machines',
+          count: inventory.bp_machines,
+          threshold,
+        })
+      }
+      if (inventory.ultrasonography !== undefined && inventory.ultrasonography < threshold) {
+        alerts.push({
+          item: 'Ultrasonography',
+          count: inventory.ultrasonography,
+          threshold,
+        })
+      }
+      if (inventory.xray_machines !== undefined && inventory.xray_machines < threshold) {
+        alerts.push({
+          item: 'X-Ray Machines',
+          count: inventory.xray_machines,
+          threshold,
+        })
+      }
+      if (inventory.medicines && Array.isArray(inventory.medicines)) {
+        inventory.medicines.forEach((med: any) => {
+          if (med.count < threshold) {
+            alerts.push({
+              item: `Medicine: ${med.name}`,
+              count: med.count,
+              threshold,
+            })
+          }
+        })
+      }
+      if (inventory.instruments && Array.isArray(inventory.instruments)) {
+        inventory.instruments.forEach((instrument: any) => {
+          if (instrument.count < threshold) {
+            alerts.push({
+              item: `Instrument: ${instrument.name}`,
+              count: instrument.count,
+              threshold,
+            })
+          }
+        })
+      }
+      if (inventory.other_equipment && Array.isArray(inventory.other_equipment)) {
+        inventory.other_equipment.forEach((equipment: any) => {
+          if (equipment.count < threshold) {
+            alerts.push({
+              item: equipment.name,
+              count: equipment.count,
+              threshold,
+            })
+          }
+        })
+      }
 
-          toast({
-            title: "⚠️ Low Stock Alert",
-            description: `${itemsList}${response.data.lowStockItems.length > 3 ? " and more" : ""}`,
-            variant: "destructive",
-          })
-        }
+      setLowStockItems(alerts)
+
+      // Show toast notification only if there are new alerts
+      if (alerts.length > 0) {
+        const itemsList = alerts
+          .slice(0, 3)
+          .map((item: any) => `${item.item}: ${item.count}`)
+          .join(", ")
+
+        toast({
+          title: "⚠️ Low Stock Alert",
+          description: `${itemsList}${alerts.length > 3 ? " and more" : ""}`,
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("Error checking stock:", error)
@@ -142,7 +286,13 @@ export default function Dashboard() {
 
       const response = await deallocateResources(token, allocationId)
       if (response.success) {
-        await fetchAllocations()
+        // Refresh all data after deallocation
+        setTimeout(() => {
+          fetchAllocations()
+          checkStock()
+          fetchDocuments()
+          fetchResources()
+        }, 500)
         toast({
           title: "Success",
           description: "Resources deallocated successfully",
@@ -466,6 +616,52 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        {/* Current Inventory */}
+        {resources && resources.inventory && (
+          <Card className="border-border mt-8 mb-8">
+            <CardHeader>
+              <CardTitle>Current Inventory Status</CardTitle>
+              <CardDescription>Synced with Resources Page</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {resources.inventory.general_beds !== undefined && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground font-medium mb-1">General Beds</p>
+                    <p className="text-2xl font-bold text-foreground">{resources.inventory.general_beds}</p>
+                  </div>
+                )}
+                {resources.inventory.icu_beds !== undefined && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground font-medium mb-1">ICU Beds</p>
+                    <p className="text-2xl font-bold text-foreground">{resources.inventory.icu_beds}</p>
+                  </div>
+                )}
+                {resources.inventory.isolation_beds !== undefined && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground font-medium mb-1">Isolation Beds</p>
+                    <p className="text-2xl font-bold text-foreground">{resources.inventory.isolation_beds}</p>
+                  </div>
+                )}
+                {resources.inventory.ot_rooms !== undefined && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground font-medium mb-1">OT Rooms</p>
+                    <p className="text-2xl font-bold text-foreground">{resources.inventory.ot_rooms}</p>
+                  </div>
+                )}
+                {resources.inventory.other_equipment && Array.isArray(resources.inventory.other_equipment) && (
+                  resources.inventory.other_equipment.map((equipment: any, idx: number) => (
+                    <div key={idx} className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <p className="text-xs text-muted-foreground font-medium mb-1">{equipment.name}</p>
+                      <p className="text-2xl font-bold text-foreground">{equipment.count}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Low Stock Alerts */}
         {lowStockItems.length > 0 && (
           <Card className="border-orange-500/50 bg-orange-50/50 dark:bg-orange-950/20 mt-8 mb-8">
@@ -508,8 +704,13 @@ export default function Dashboard() {
                   token={token}
                   onSuccess={() => {
                     setSelectedDocForAllocation(null)
-                    fetchAllocations()
-                    checkStock()
+                    // Refresh all data after allocation
+                    setTimeout(() => {
+                      fetchAllocations()
+                      checkStock()
+                      fetchDocuments()
+                      fetchResources()
+                    }, 500)
                   }}
                 />
               )}

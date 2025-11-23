@@ -305,6 +305,10 @@ From the text, extract and identify the following:
    - Antibodies (count)
    - OT Rooms (count)
    - General Beds (count)
+   - ICU Beds (count if mentioned)
+   - Isolation Beds (count if mentioned)
+   - Oxygen Cylinders (count)
+   - Dialysis Machines (count)
    - Available Nurses (count if provided)
    - Medical Instruments (list + count)
    - ECG Machines (count)
@@ -334,6 +338,10 @@ Return all results strictly in the following JSON structure:
     "antibodies": 0,
     "ot_rooms": 0,
     "general_beds": 0,
+    "icu_beds": 0,
+    "isolation_beds": 0,
+    "oxygen_cylinders": 0,
+    "dialysis_machines": 0,
     "available_nurses_count": 0,
     "instruments": [{ "name": "", "count": 0 }],
     "ecg_machines": 0,
@@ -394,6 +402,8 @@ ${text}
         antibodies: resourceData.inventory?.antibodies ?? 0,
         ot_rooms: resourceData.inventory?.ot_rooms ?? 0,
         general_beds: resourceData.inventory?.general_beds ?? 0,
+        icu_beds: resourceData.inventory?.icu_beds ?? 0,
+        isolation_beds: resourceData.inventory?.isolation_beds ?? 0,
         available_nurses_count: resourceData.inventory?.available_nurses_count ?? 0,
         instruments: Array.isArray(resourceData.inventory?.instruments) ? resourceData.inventory.instruments : [],
         ecg_machines: resourceData.inventory?.ecg_machines ?? 0,
@@ -402,6 +412,8 @@ ${text}
         bp_machines: resourceData.inventory?.bp_machines ?? 0,
         ultrasonography: resourceData.inventory?.ultrasonography ?? 0,
         xray_machines: resourceData.inventory?.xray_machines ?? 0,
+        oxygen_cylinders: resourceData.inventory?.oxygen_cylinders ?? 0,
+        dialysis_machines: resourceData.inventory?.dialysis_machines ?? 0,
         other_equipment: Array.isArray(resourceData.inventory?.other_equipment) ? resourceData.inventory.other_equipment : [],
       },
     };

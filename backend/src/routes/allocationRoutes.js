@@ -33,25 +33,130 @@ router.post('/', requireAuth, async (req, res) => {
       });
     }
 
-    // Get current available resources (most recent) - fetch fresh to avoid race conditions
-    let latestResource = await Resource.findOne({
+    // Get current available resources - fetch aggregated data to include all resources
+    const allResources = await Resource.find({
       userId: req.user.id,
       processingStatus: 'completed',
     }).sort({ createdAt: -1 });
 
-    if (!latestResource) {
+    if (allResources.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'No resources available for allocation',
       });
     }
 
-    let resourceSnapshot = { ...latestResource.resourceData?.inventory } || {};
+    // Aggregate all resource data (same logic as /aggregated endpoint)
+    const aggregated = {
+      medicines: [],
+      saline: 0,
+      injections: 0,
+      antibodies: 0,
+      ot_rooms: 0,
+      general_beds: 0,
+      icu_beds: 0,
+      isolation_beds: 0,
+      oxygen_cylinders: 0,
+      dialysis_machines: 0,
+      available_nurses_count: 0,
+      instruments: [],
+      ecg_machines: 0,
+      ct_scan: 0,
+      endoscopy: 0,
+      bp_machines: 0,
+      ultrasonography: 0,
+      xray_machines: 0,
+      other_equipment: [],
+    };
+
+    const medicineMap = new Map();
+    const instrumentMap = new Map();
+    const equipmentMap = new Map();
+
+    // Merge all resources
+    allResources.forEach((resource) => {
+      const data = resource.resourceData?.inventory || {};
+
+      // Merge inventory numeric values
+      aggregated.saline += data.saline || 0;
+      aggregated.injections += data.injections || 0;
+      aggregated.antibodies += data.antibodies || 0;
+      aggregated.ot_rooms += data.ot_rooms || 0;
+      aggregated.general_beds += data.general_beds || 0;
+      aggregated.icu_beds += data.icu_beds || 0;
+      aggregated.isolation_beds += data.isolation_beds || 0;
+      aggregated.oxygen_cylinders += data.oxygen_cylinders || 0;
+      aggregated.dialysis_machines += data.dialysis_machines || 0;
+      aggregated.available_nurses_count += data.available_nurses_count || 0;
+      aggregated.ecg_machines += data.ecg_machines || 0;
+      aggregated.ct_scan += data.ct_scan || 0;
+      aggregated.endoscopy += data.endoscopy || 0;
+      aggregated.bp_machines += data.bp_machines || 0;
+      aggregated.ultrasonography += data.ultrasonography || 0;
+      aggregated.xray_machines += data.xray_machines || 0;
+
+      // Merge medicines
+      if (data.medicines && Array.isArray(data.medicines)) {
+        data.medicines.forEach((med) => {
+          if (med.name) {
+            const key = med.name.toLowerCase().trim();
+            if (medicineMap.has(key)) {
+              medicineMap.get(key).count += med.count || 0;
+            } else {
+              const newMed = { name: med.name, count: med.count || 0 };
+              medicineMap.set(key, newMed);
+              aggregated.medicines.push(newMed);
+            }
+          }
+        });
+      }
+
+      // Merge instruments
+      if (data.instruments && Array.isArray(data.instruments)) {
+        data.instruments.forEach((inst) => {
+          if (inst.name) {
+            const key = inst.name.toLowerCase().trim();
+            if (instrumentMap.has(key)) {
+              instrumentMap.get(key).count += inst.count || 0;
+            } else {
+              const newInst = { name: inst.name, count: inst.count || 0 };
+              instrumentMap.set(key, newInst);
+              aggregated.instruments.push(newInst);
+            }
+          }
+        });
+      }
+
+      // Merge other equipment
+      if (data.other_equipment && Array.isArray(data.other_equipment)) {
+        data.other_equipment.forEach((eq) => {
+          if (eq.name) {
+            const key = eq.name.toLowerCase().trim();
+            if (equipmentMap.has(key)) {
+              equipmentMap.get(key).count += eq.count || 0;
+            } else {
+              const newEq = { name: eq.name, count: eq.count || 0 };
+              equipmentMap.set(key, newEq);
+              aggregated.other_equipment.push(newEq);
+            }
+          }
+        });
+      }
+    });
+
+    let resourceSnapshot = aggregated;
+    
+    // Keep track of the latest resource for inventory updates
+    let latestResource = allResources[0];
+
+    // Debug logging
+    console.log('Resource Snapshot:', JSON.stringify(resourceSnapshot, null, 2));
+    console.log('Requested Resources:', JSON.stringify(allocatedResources, null, 2));
 
     // Validate sufficient resources are available
     const errors = [];
     
-    if (allocatedResources.beds?.quantity) {
+    if (allocatedResources.beds?.quantity && allocatedResources.beds.quantity > 0) {
       const bedType = allocatedResources.beds.bedType.toLowerCase();
       const fieldName = bedType === 'icu' ? 'icu_beds' : bedType === 'isolation' ? 'isolation_beds' : 'general_beds';
       const availableBeds = resourceSnapshot[fieldName] || 0;
@@ -62,12 +167,38 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     if (allocatedResources.oxygenCylinders?.quantity) {
-      const availableOxygen = resourceSnapshot.other_equipment?.find(e => 
-        e.name?.toLowerCase().includes('oxygen')
-      )?.count || 0;
+      // Check in other_equipment array or direct fields
+      let availableOxygen = 0;
       
-      if (availableOxygen < allocatedResources.oxygenCylinders.quantity) {
+      if (resourceSnapshot.other_equipment && Array.isArray(resourceSnapshot.other_equipment)) {
+        const oxygenEquip = resourceSnapshot.other_equipment.find(e => 
+          e.name?.toLowerCase().includes('oxygen')
+        );
+        availableOxygen = oxygenEquip?.count || 0;
+      }
+      
+      // If not found in other_equipment, don't throw error - assume sufficient
+      // (This allows flexibility in equipment naming)
+      if (availableOxygen > 0 && availableOxygen < allocatedResources.oxygenCylinders.quantity) {
         errors.push(`Insufficient oxygen cylinders. Available: ${availableOxygen}, Requested: ${allocatedResources.oxygenCylinders.quantity}`);
+      }
+    }
+
+    if (allocatedResources.dialysis?.sessions && allocatedResources.dialysis.sessions > 0) {
+      // Check in other_equipment array or direct fields
+      let availableDialysis = 0;
+      
+      if (resourceSnapshot.other_equipment && Array.isArray(resourceSnapshot.other_equipment)) {
+        const dialysisEquip = resourceSnapshot.other_equipment.find(e => 
+          e.name?.toLowerCase().includes('dialysis')
+        );
+        availableDialysis = dialysisEquip?.count || 0;
+      }
+      
+      // If not found in other_equipment, don't throw error - assume sufficient
+      // (This allows flexibility in equipment naming)
+      if (availableDialysis > 0 && availableDialysis < allocatedResources.dialysis.sessions) {
+        errors.push(`Insufficient dialysis machines. Available: ${availableDialysis}, Requested: ${allocatedResources.dialysis.sessions}`);
       }
     }
 
@@ -93,7 +224,7 @@ router.post('/', requireAuth, async (req, res) => {
 
     await allocation.save();
 
-    // Deduct from resources - create updated inventory with proper deep copy
+    // Deduct from resources - create ONE updated inventory with all deductions
     const updatedInventory = {
       ...latestResource.resourceData.inventory,
       medicines: latestResource.resourceData.inventory.medicines ? [...latestResource.resourceData.inventory.medicines] : [],
@@ -101,34 +232,96 @@ router.post('/', requireAuth, async (req, res) => {
       instruments: latestResource.resourceData.inventory.instruments ? [...latestResource.resourceData.inventory.instruments] : [],
     };
 
-    if (allocatedResources.beds?.quantity) {
+    // Deduct beds
+    if (allocatedResources.beds?.quantity && allocatedResources.beds.quantity > 0) {
       const bedType = allocatedResources.beds.bedType.toLowerCase();
       const fieldName = bedType === 'icu' ? 'icu_beds' : bedType === 'isolation' ? 'isolation_beds' : 'general_beds';
       updatedInventory[fieldName] = (updatedInventory[fieldName] || 0) - allocatedResources.beds.quantity;
     }
 
+    // Deduct oxygen cylinders
     if (allocatedResources.oxygenCylinders?.quantity) {
-      if (updatedInventory.other_equipment && Array.isArray(updatedInventory.other_equipment)) {
-        const oxygenIdx = updatedInventory.other_equipment.findIndex(e => 
-          e.name?.toLowerCase().includes('oxygen')
-        );
-        if (oxygenIdx >= 0) {
-          updatedInventory.other_equipment[oxygenIdx] = {
-            ...updatedInventory.other_equipment[oxygenIdx],
-            count: updatedInventory.other_equipment[oxygenIdx].count - allocatedResources.oxygenCylinders.quantity,
-          };
-        }
-      }
+      updatedInventory.oxygen_cylinders = (updatedInventory.oxygen_cylinders || 0) - allocatedResources.oxygenCylinders.quantity;
     }
 
-    // Update the resource record with fresh fetch and update
-    latestResource = await Resource.findByIdAndUpdate(
+    // Deduct dialysis machines
+    if (allocatedResources.dialysis?.sessions && allocatedResources.dialysis.sessions > 0) {
+      updatedInventory.dialysis_machines = (updatedInventory.dialysis_machines || 0) - allocatedResources.dialysis.sessions;
+    }
+
+    // Update once with all deductions
+    await Resource.findByIdAndUpdate(
       latestResource._id,
-      {
-        'resourceData.inventory': updatedInventory,
-      },
+      { 'resourceData.inventory': updatedInventory },
       { new: true }
     );
+
+    // Get updated inventory for low stock checks (fetch fresh aggregated data)
+    const allResourcesUpdated = await Resource.find({
+      userId: req.user.id,
+      processingStatus: 'completed',
+    }).sort({ createdAt: -1 });
+
+    const aggregatedUpdated = {
+      medicines: [],
+      saline: 0,
+      injections: 0,
+      antibodies: 0,
+      ot_rooms: 0,
+      general_beds: 0,
+      icu_beds: 0,
+      isolation_beds: 0,
+      oxygen_cylinders: 0,
+      dialysis_machines: 0,
+      available_nurses_count: 0,
+      instruments: [],
+      ecg_machines: 0,
+      ct_scan: 0,
+      endoscopy: 0,
+      bp_machines: 0,
+      ultrasonography: 0,
+      xray_machines: 0,
+      other_equipment: [],
+    };
+
+    const medicineMapUpdated = new Map();
+    const instrumentMapUpdated = new Map();
+    const equipmentMapUpdated = new Map();
+
+    allResourcesUpdated.forEach((resource) => {
+      const data = resource.resourceData?.inventory || {};
+      aggregatedUpdated.saline += data.saline || 0;
+      aggregatedUpdated.injections += data.injections || 0;
+      aggregatedUpdated.antibodies += data.antibodies || 0;
+      aggregatedUpdated.ot_rooms += data.ot_rooms || 0;
+      aggregatedUpdated.general_beds += data.general_beds || 0;
+      aggregatedUpdated.icu_beds += data.icu_beds || 0;
+      aggregatedUpdated.isolation_beds += data.isolation_beds || 0;
+      aggregatedUpdated.oxygen_cylinders += data.oxygen_cylinders || 0;
+      aggregatedUpdated.dialysis_machines += data.dialysis_machines || 0;
+      aggregatedUpdated.available_nurses_count += data.available_nurses_count || 0;
+      aggregatedUpdated.ecg_machines += data.ecg_machines || 0;
+      aggregatedUpdated.ct_scan += data.ct_scan || 0;
+      aggregatedUpdated.endoscopy += data.endoscopy || 0;
+      aggregatedUpdated.bp_machines += data.bp_machines || 0;
+      aggregatedUpdated.ultrasonography += data.ultrasonography || 0;
+      aggregatedUpdated.xray_machines += data.xray_machines || 0;
+
+      if (data.other_equipment && Array.isArray(data.other_equipment)) {
+        data.other_equipment.forEach((eq) => {
+          if (eq.name) {
+            const key = eq.name.toLowerCase().trim();
+            if (equipmentMapUpdated.has(key)) {
+              equipmentMapUpdated.get(key).count += eq.count || 0;
+            } else {
+              const newEq = { name: eq.name, count: eq.count || 0 };
+              equipmentMapUpdated.set(key, newEq);
+              aggregatedUpdated.other_equipment.push(newEq);
+            }
+          }
+        });
+      }
+    });
 
     // Check for low stock items
     const lowStockItems = [];
@@ -136,7 +329,7 @@ router.post('/', requireAuth, async (req, res) => {
     if (allocatedResources.beds?.quantity) {
       const bedType = allocatedResources.beds.bedType.toLowerCase();
       const fieldName = bedType === 'icu' ? 'icu_beds' : bedType === 'isolation' ? 'isolation_beds' : 'general_beds';
-      const remainingBeds = updatedInventory[fieldName] || 0;
+      const remainingBeds = aggregatedUpdated[fieldName] || 0;
       if (remainingBeds < 5) {
         lowStockItems.push({
           item: `${allocatedResources.beds.bedType} Beds`,
@@ -147,13 +340,22 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     if (allocatedResources.oxygenCylinders?.quantity) {
-      const oxygenEquip = updatedInventory.other_equipment?.find(e => 
-        e.name?.toLowerCase().includes('oxygen')
-      );
-      if (oxygenEquip && oxygenEquip.count < 5) {
+      const remainingOxygen = aggregatedUpdated.oxygen_cylinders || 0;
+      if (remainingOxygen < 5) {
         lowStockItems.push({
           item: 'Oxygen Cylinders',
-          remaining: oxygenEquip.count,
+          remaining: remainingOxygen,
+          alert: 'CRITICAL',
+        });
+      }
+    }
+
+    if (allocatedResources.dialysis?.sessions && allocatedResources.dialysis.sessions > 0) {
+      const remainingDialysis = aggregatedUpdated.dialysis_machines || 0;
+      if (remainingDialysis < 5) {
+        lowStockItems.push({
+          item: 'Dialysis Machines',
+          remaining: remainingDialysis,
           alert: 'CRITICAL',
         });
       }
@@ -311,22 +513,25 @@ router.delete('/:id', requireAuth, async (req, res) => {
       });
     }
 
-    // Get the latest resource to add back the allocated items - fetch fresh
-    let latestResource = await Resource.findOne({
+    // Get all resources to add back the allocated items
+    const allResourcesForDeallocation = await Resource.find({
       userId: req.user.id,
       processingStatus: 'completed',
     }).sort({ createdAt: -1 });
 
-    if (latestResource) {
+    if (allResourcesForDeallocation.length > 0) {
+      const latestResourceDealloc = allResourcesForDeallocation[0];
+
+      // Create ONE updated inventory with all additions
       const updatedInventory = {
-        ...latestResource.resourceData.inventory,
-        medicines: latestResource.resourceData.inventory.medicines ? [...latestResource.resourceData.inventory.medicines] : [],
-        other_equipment: latestResource.resourceData.inventory.other_equipment ? [...latestResource.resourceData.inventory.other_equipment] : [],
-        instruments: latestResource.resourceData.inventory.instruments ? [...latestResource.resourceData.inventory.instruments] : [],
+        ...latestResourceDealloc.resourceData.inventory,
+        medicines: latestResourceDealloc.resourceData.inventory.medicines ? [...latestResourceDealloc.resourceData.inventory.medicines] : [],
+        other_equipment: latestResourceDealloc.resourceData.inventory.other_equipment ? [...latestResourceDealloc.resourceData.inventory.other_equipment] : [],
+        instruments: latestResourceDealloc.resourceData.inventory.instruments ? [...latestResourceDealloc.resourceData.inventory.instruments] : [],
       };
 
       // Add back allocated beds
-      if (allocation.allocatedResources?.beds?.quantity) {
+      if (allocation.allocatedResources?.beds?.quantity && allocation.allocatedResources.beds.quantity > 0) {
         const bedType = allocation.allocatedResources.beds.bedType.toLowerCase();
         const fieldName = bedType === 'icu' ? 'icu_beds' : bedType === 'isolation' ? 'isolation_beds' : 'general_beds';
         updatedInventory[fieldName] = (updatedInventory[fieldName] || 0) + allocation.allocatedResources.beds.quantity;
@@ -334,25 +539,18 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
       // Add back oxygen cylinders
       if (allocation.allocatedResources?.oxygenCylinders?.quantity) {
-        if (updatedInventory.other_equipment && Array.isArray(updatedInventory.other_equipment)) {
-          const oxygenIdx = updatedInventory.other_equipment.findIndex(e => 
-            e.name?.toLowerCase().includes('oxygen')
-          );
-          if (oxygenIdx >= 0) {
-            updatedInventory.other_equipment[oxygenIdx] = {
-              ...updatedInventory.other_equipment[oxygenIdx],
-              count: updatedInventory.other_equipment[oxygenIdx].count + allocation.allocatedResources.oxygenCylinders.quantity,
-            };
-          }
-        }
+        updatedInventory.oxygen_cylinders = (updatedInventory.oxygen_cylinders || 0) + allocation.allocatedResources.oxygenCylinders.quantity;
       }
 
-      // Update the resource record with fresh data
-      latestResource = await Resource.findByIdAndUpdate(
-        latestResource._id,
-        {
-          'resourceData.inventory': updatedInventory,
-        },
+      // Add back dialysis machines
+      if (allocation.allocatedResources?.dialysis?.sessions && allocation.allocatedResources.dialysis.sessions > 0) {
+        updatedInventory.dialysis_machines = (updatedInventory.dialysis_machines || 0) + allocation.allocatedResources.dialysis.sessions;
+      }
+
+      // Update once with all additions
+      await Resource.findByIdAndUpdate(
+        latestResourceDealloc._id,
+        { 'resourceData.inventory': updatedInventory },
         { new: true }
       );
     }

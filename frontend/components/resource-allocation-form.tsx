@@ -187,7 +187,7 @@ export function ResourceAllocationForm({
                 <input
                   type="number"
                   min="0"
-                  value={formData.allocatedResources.beds?.quantity || 1}
+                  value={formData.allocatedResources.beds?.quantity || 0}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
