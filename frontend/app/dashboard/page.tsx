@@ -1,22 +1,22 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import {
   FileText,
   Loader2,
   Trash2,
-  Download,
-  Eye,
   AlertCircle,
   CheckCircle2,
+  Search,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { getDocuments, deleteDocument, getAllocations, deallocateResources, checkStockLevels, type Document } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { ResourceAllocationForm } from "@/components/resource-allocation-form"
-import Link from "next/link"
 
 export default function Dashboard() {
   const router = useRouter()
@@ -29,6 +29,9 @@ export default function Dashboard() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [selectedDocForAllocation, setSelectedDocForAllocation] = useState<string | null>(null)
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
+  const [expandedDocs, setExpandedDocs] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState("")
+  const allocationSectionRef = useRef<HTMLDivElement>(null)
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -174,7 +177,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted p-4 md:p-8">
+    <div className="min-h-screen bg-linear-to-br from-background via-background to-muted p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -215,7 +218,6 @@ export default function Dashboard() {
           </Card>
         </div>
 
-
         {/* Processed Documents */}
         <Card className="border-border">
           <CardHeader>
@@ -223,6 +225,16 @@ export default function Dashboard() {
             <CardDescription>
               PDF documents processed with OCR and extracted medical data
             </CardDescription>
+            <div className="mt-4 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search by Patient ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-lg border border-input bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -242,50 +254,121 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {documents.map((doc) => (
-                  <div
-                    key={doc._id}
-                    className="p-4 rounded-lg bg-muted/50 border border-border hover:border-primary/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4 flex-1">
-                        <FileText className="w-8 h-8 text-primary mt-1" />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-foreground truncate">{doc.fileName}</h4>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-muted-foreground">
-                            <span>{formatFileSize(doc.fileSize)}</span>
-                            <span>•</span>
-                            <span>{formatDate(doc.createdAt)}</span>
-                            {doc.metadata.pageCount && (
-                              <>
-                                <span>•</span>
-                                <span>{doc.metadata.pageCount} pages</span>
-                              </>
-                            )}
+                {(() => {
+                  const filtered = documents.filter((doc) => {
+                    const patientId = doc.extractedData?.patientInfo?.id || doc.extractedData?.patientId || ""
+                    return patientId.toLowerCase().includes(searchQuery.toLowerCase())
+                  })
+
+                  return filtered.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-muted-foreground">No documents found matching Patient ID "{searchQuery}"</p>
+                    </div>
+                  ) : (
+                    filtered.map((doc) => {
+                      const isExpanded = expandedDocs.has(doc._id)
+                      const patientName = doc.extractedData?.patientInfo?.name || doc.extractedData?.patientName || "Unknown"
+                      const patientId = doc.extractedData?.patientInfo?.id || doc.extractedData?.patientId || "N/A"
+                      const diagnosis = doc.extractedData?.diagnosis || doc.extractedData?.medicalConditions?.[0] || "Not specified"
+
+                      return (
+                        <div
+                          key={doc._id}
+                          className="p-4 rounded-lg bg-muted/50 border border-border hover:border-primary/50 transition-colors"
+                        >
+                          {/* Collapsed View */}
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-4 flex-1 min-w-0">
+                              <FileText className="w-8 h-8 text-primary mt-1 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-foreground truncate">{doc.fileName}</h4>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-muted-foreground">
+                                  <span>Patient: <span className="font-medium text-foreground">{patientName}</span></span>
+                                  <span>•</span>
+                                  <span>ID: <span className="font-medium text-foreground">{patientId}</span></span>
+                                </div>
+                                <div className="mt-2">
+                                  <p className="text-xs text-muted-foreground">
+                                    <span className="font-medium">Diagnosis:</span> {diagnosis}
+                                  </p>
+                                </div>
+                                <div className="mt-2">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      doc.processingStatus === "completed"
+                                        ? "bg-green-500/20 text-green-600"
+                                        : doc.processingStatus === "processing"
+                                          ? "bg-blue-500/20 text-blue-600"
+                                          : doc.processingStatus === "failed"
+                                            ? "bg-destructive/20 text-destructive"
+                                            : "bg-yellow-500/20 text-yellow-600"
+                                    }`}
+                                  >
+                                    {doc.processingStatus === "completed" && `✓ Completed (${doc.ocrConfidence}% confidence)`}
+                                    {doc.processingStatus === "processing" && "⏳ Processing..."}
+                                    {doc.processingStatus === "failed" && "✗ Failed"}
+                                    {doc.processingStatus === "pending" && "⏸ Pending"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              {doc.processingStatus === "completed" && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setExpandedDocs(prev => {
+                                        const next = new Set(prev)
+                                        if (next.has(doc._id)) next.delete(doc._id)
+                                        else next.add(doc._id)
+                                        return next
+                                      })
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground"
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronUp className="w-4 h-4" />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedDocForAllocation(doc._id)
+                                      setTimeout(() => {
+                                        allocationSectionRef.current?.scrollIntoView({ behavior: "smooth" })
+                                      }, 100)
+                                    }}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    Allocate
+                                  </Button>
+                                </>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(doc._id)}
+                                disabled={deleting === doc._id}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                {deleting === doc._id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </div>
                           </div>
-                          <div className="mt-2">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                doc.processingStatus === "completed"
-                                  ? "bg-green-500/20 text-green-600"
-                                  : doc.processingStatus === "processing"
-                                    ? "bg-blue-500/20 text-blue-600"
-                                    : doc.processingStatus === "failed"
-                                      ? "bg-destructive/20 text-destructive"
-                                      : "bg-yellow-500/20 text-yellow-600"
-                              }`}
-                            >
-                              {doc.processingStatus === "completed" && `✓ Completed (${doc.ocrConfidence}% confidence)`}
-                              {doc.processingStatus === "processing" && "⏳ Processing..."}
-                              {doc.processingStatus === "failed" && "✗ Failed"}
-                              {doc.processingStatus === "pending" && "⏸ Pending"}
-                            </span>
-                          </div>
-                          {doc.processingStatus === "completed" && doc.extractedData && (
-                            <div className="mt-3 p-4 bg-background rounded border border-border space-y-3">
-                              <p className="text-xs font-semibold text-foreground mb-3">
-                                Extracted Medical Information:
-                              </p>
+
+                          {/* Expanded View */}
+                          {isExpanded && doc.processingStatus === "completed" && doc.extractedData && (
+                            <div className="mt-4 pt-4 border-t border-border space-y-3">
+                              <p className="text-xs font-semibold text-foreground">Extracted Medical Information:</p>
                               
                               {/* Hospital Name */}
                               {doc.extractedData.hospitalName && (
@@ -295,54 +378,11 @@ export default function Dashboard() {
                                 </div>
                               )}
                               
-                              {/* Patient Details */}
-                              {(doc.extractedData.patientInfo || doc.extractedData.patientName) && (
-                                <div className="pb-3 border-b border-border">
-                                  <p className="text-xs text-muted-foreground font-medium mb-2">Patient Details:</p>
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    {(doc.extractedData.patientInfo?.name || doc.extractedData.patientName) && (
-                                      <div><span className="text-muted-foreground">Name:</span> <span className="text-foreground font-medium">{doc.extractedData.patientInfo?.name || doc.extractedData.patientName}</span></div>
-                                    )}
-                                    {(doc.extractedData.patientInfo?.age || doc.extractedData.patientAge) && (
-                                      <div><span className="text-muted-foreground">Age:</span> <span className="text-foreground font-medium">{doc.extractedData.patientInfo?.age || doc.extractedData.patientAge}</span></div>
-                                    )}
-                                    {(doc.extractedData.patientInfo?.gender || doc.extractedData.patientGender) && (
-                                      <div><span className="text-muted-foreground">Gender:</span> <span className="text-foreground font-medium">{doc.extractedData.patientInfo?.gender || doc.extractedData.patientGender}</span></div>
-                                    )}
-                                    {(doc.extractedData.patientInfo?.id || doc.extractedData.patientId) && (
-                                      <div><span className="text-muted-foreground">ID:</span> <span className="text-foreground font-medium">{doc.extractedData.patientInfo?.id || doc.extractedData.patientId}</span></div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                              
                               {/* Doctor Name */}
                               {(doc.extractedData.doctorName || doc.extractedData.physicianName) && (
                                 <div className="pb-3 border-b border-border">
                                   <p className="text-xs text-muted-foreground font-medium mb-1">Doctor:</p>
                                   <p className="text-sm font-semibold text-foreground">{doc.extractedData.doctorName || doc.extractedData.physicianName}</p>
-                                </div>
-                              )}
-                              
-                              {/* Diagnosis Details */}
-                              {(doc.extractedData.diagnosis || (doc.extractedData.medicalConditions && doc.extractedData.medicalConditions.length > 0)) && (
-                                <div className="pb-3 border-b border-border">
-                                  <p className="text-xs text-muted-foreground font-medium mb-2">Diagnosis & Conditions:</p>
-                                  {doc.extractedData.diagnosis && (
-                                    <p className="text-xs text-foreground mb-2">{doc.extractedData.diagnosis}</p>
-                                  )}
-                                  {doc.extractedData.medicalConditions && doc.extractedData.medicalConditions.length > 0 && (
-                                    <div className="flex flex-wrap gap-1">
-                                      {doc.extractedData.medicalConditions.map((condition, idx) => {
-                                        const condText = typeof condition === 'string' ? condition : (condition as any)?.name || JSON.stringify(condition);
-                                        return (
-                                          <span key={idx} className="bg-red-500/10 text-red-600 px-2 py-1 rounded text-xs">
-                                            {condText}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
                                 </div>
                               )}
                               
@@ -383,70 +423,16 @@ export default function Dashboard() {
                                 </div>
                               )}
                               
-                              {/* Visit Dates */}
-                              {doc.extractedData.dates && doc.extractedData.dates.length > 0 && (
+                              {/* Medical Conditions */}
+                              {doc.extractedData.medicalConditions && doc.extractedData.medicalConditions.length > 0 && (
                                 <div className="pb-3 border-b border-border">
-                                  <p className="text-xs text-muted-foreground font-medium mb-1">Dates:</p>
+                                  <p className="text-xs text-muted-foreground font-medium mb-2">Medical Conditions:</p>
                                   <div className="flex flex-wrap gap-1">
-                                    {doc.extractedData.dates.map((date, idx) => {
-                                      const dateText = typeof date === 'string' ? date : (date as any)?.date || JSON.stringify(date);
+                                    {doc.extractedData.medicalConditions.map((condition, idx) => {
+                                      const condText = typeof condition === 'string' ? condition : (condition as any)?.name || JSON.stringify(condition);
                                       return (
-                                        <span key={idx} className="bg-green-500/10 text-green-600 px-2 py-1 rounded text-xs">
-                                          {dateText}
-                                        </span>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Contact Information */}
-                              {((doc.extractedData.emails && doc.extractedData.emails.length > 0) || (doc.extractedData.phones && doc.extractedData.phones.length > 0)) && (
-                                <div className="pb-3 border-b border-border">
-                                  <p className="text-xs text-muted-foreground font-medium mb-2">Contact Information:</p>
-                                  {doc.extractedData.emails && doc.extractedData.emails.length > 0 && (
-                                    <div className="mb-2">
-                                      <p className="text-xs text-muted-foreground">Emails:</p>
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {doc.extractedData.emails.map((email, idx) => {
-                                          const emailText = typeof email === 'string' ? email : (email as any)?.email || JSON.stringify(email);
-                                          return (
-                                            <span key={idx} className="bg-purple-500/10 text-purple-600 px-2 py-1 rounded text-xs break-all">
-                                              {emailText}
-                                            </span>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-                                  {doc.extractedData.phones && doc.extractedData.phones.length > 0 && (
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Phones:</p>
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {doc.extractedData.phones.map((phone, idx) => {
-                                          const phoneText = typeof phone === 'string' ? phone : (phone as any)?.phone || JSON.stringify(phone);
-                                          return (
-                                            <span key={idx} className="bg-orange-500/10 text-orange-600 px-2 py-1 rounded text-xs">
-                                              {phoneText}
-                                            </span>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Medical Terms */}
-                              {doc.extractedData.medicalTerms && doc.extractedData.medicalTerms.length > 0 && (
-                                <div className="pb-3 border-b border-border">
-                                  <p className="text-xs text-muted-foreground font-medium mb-1">Medical Terms Identified:</p>
-                                  <div className="flex flex-wrap gap-1">
-                                    {doc.extractedData.medicalTerms.map((term, idx) => {
-                                      const termText = typeof term === 'string' ? term : (term as any)?.term || JSON.stringify(term);
-                                      return (
-                                        <span key={idx} className="bg-cyan-500/10 text-cyan-600 px-2 py-1 rounded text-xs">
-                                          {termText}
+                                        <span key={idx} className="bg-red-500/10 text-red-600 px-2 py-1 rounded text-xs">
+                                          {condText}
                                         </span>
                                       );
                                     })}
@@ -458,47 +444,23 @@ export default function Dashboard() {
                               {doc.ocrText && (
                                 <div className="pt-2">
                                   <p className="text-xs font-semibold text-foreground mb-1">Full Text Preview:</p>
-                                  <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-wrap bg-muted/50 p-2 rounded">
-                                    {doc.ocrText.substring(0, 250)}
-                                    {doc.ocrText.length > 250 && "..."}
+                                  <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap bg-muted/50 p-2 rounded">
+                                    {doc.ocrText.substring(0, 300)}
+                                    {doc.ocrText.length > 300 && "..."}
                                   </p>
                                 </div>
                               )}
                             </div>
                           )}
+
                           {doc.processingStatus === "failed" && doc.errorMessage && (
                             <p className="mt-2 text-xs text-destructive">{doc.errorMessage}</p>
                           )}
                         </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {doc.processingStatus === "completed" && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => setSelectedDocForAllocation(doc._id)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            Allocate
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(doc._id)}
-                          disabled={deleting === doc._id}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          {deleting === doc._id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                      )
+                    })
+                  )
+                })()}
               </div>
             )}
           </CardContent>
@@ -530,28 +492,30 @@ export default function Dashboard() {
         )}
 
         {/* Resource Allocation Form */}
-        {selectedDocForAllocation && token && (
-          <div className="mt-8 mb-8">
-            <Button 
-              variant="outline" 
-              onClick={() => setSelectedDocForAllocation(null)}
-              className="mb-4"
-            >
-              Cancel Allocation
-            </Button>
-            {documents.find(d => d._id === selectedDocForAllocation) && (
-              <ResourceAllocationForm
-                document={documents.find(d => d._id === selectedDocForAllocation)!}
-                token={token}
-                onSuccess={() => {
-                  setSelectedDocForAllocation(null)
-                  fetchAllocations()
-                  checkStock()
-                }}
-              />
-            )}
-          </div>
-        )}
+        <div ref={allocationSectionRef}>
+          {selectedDocForAllocation && token && (
+            <div className="mt-8 mb-8">
+              <Button 
+                variant="outline" 
+                onClick={() => setSelectedDocForAllocation(null)}
+                className="mb-4"
+              >
+                Cancel Allocation
+              </Button>
+              {documents.find(d => d._id === selectedDocForAllocation) && (
+                <ResourceAllocationForm
+                  document={documents.find(d => d._id === selectedDocForAllocation)!}
+                  token={token}
+                  onSuccess={() => {
+                    setSelectedDocForAllocation(null)
+                    fetchAllocations()
+                    checkStock()
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Allocated Resources */}
         <Card className="border-border mt-8">
