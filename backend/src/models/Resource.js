@@ -35,6 +35,9 @@ const resourceSchema = new mongoose.Schema(
     },
     // Structured resource data from Gemini
     resourceData: {
+      hospitalName: String,
+      hospitalAddress: String,
+      city: String,
       doctors: [
         {
           name: String,

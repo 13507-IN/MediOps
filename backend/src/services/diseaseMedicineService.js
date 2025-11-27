@@ -16,17 +16,27 @@ export async function getDiseasesForConditions(weather, aqi, surgeProbability) {
 
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
+    const temp = weather?.temperature || 0;
+    const aqiValue = aqi?.aqi || 0;
+    
     const prompt = `
-You are a medical expert. Based on the following environmental conditions, provide a list of REAL medical disease names (use proper medical terminology) that are likely to increase:
+You are a medical expert. Based on the following environmental conditions, provide a list of REAL medical disease names (use proper medical terminology) that are likely to increase.
+
+IMPORTANT THRESHOLDS - Only suggest diseases that are ACTUALLY relevant:
+- Heat-related diseases (Heat Stroke, Heat Exhaustion) ONLY if temperature is ≥ 35°C
+- Cold-related diseases (Hypothermia, Frostbite) ONLY if temperature is ≤ 5°C
+- Respiratory diseases from AQI ONLY if AQI ≥ 100
+- Do NOT suggest heat stroke if temperature is below 30°C
+- Do NOT suggest hypothermia if temperature is above 10°C
 
 Weather Conditions:
-- Temperature: ${weather?.temperature || 'N/A'}°C
+- Temperature: ${temp}°C ${temp >= 35 ? '(HOT - heat-related illnesses possible)' : temp <= 5 ? '(COLD - cold-related illnesses possible)' : '(NORMAL)'}
 - Humidity: ${weather?.humidity || 'N/A'}%
 - Wind Speed: ${weather?.windSpeed || 'N/A'} km/h
 - Precipitation: ${weather?.precipitation || 'N/A'} mm
 
 Air Quality:
-- AQI: ${aqi?.aqi || 'N/A'}
+- AQI: ${aqiValue} ${aqiValue >= 150 ? '(UNHEALTHY - respiratory issues likely)' : aqiValue >= 100 ? '(UNHEALTHY FOR SENSITIVE - respiratory issues possible)' : '(NORMAL)'}
 - PM2.5: ${aqi?.pm25 || 'N/A'}
 - PM10: ${aqi?.pm10 || 'N/A'}
 
@@ -41,7 +51,7 @@ Provide a JSON array of disease names (use proper medical names like "Acute Resp
   }
 }
 
-Return ONLY valid JSON, no markdown formatting.
+Return ONLY valid JSON, no markdown formatting. Be realistic - only suggest diseases that actually match the conditions.
 `;
 
     const result = await withRetry(
@@ -127,28 +137,49 @@ Return ONLY valid JSON, no markdown formatting.
 
 /**
  * Default diseases based on conditions (fallback)
+ * Uses strict temperature thresholds to prevent absurd suggestions
  */
 function getDefaultDiseases(weather, aqi) {
   const diseases = [];
+  const temp = weather?.temperature || 0;
+  const aqiValue = aqi?.aqi || 0;
 
-  if (aqi?.aqi > 100) {
-    diseases.push('Asthma Exacerbation', 'Chronic Obstructive Pulmonary Disease (COPD)', 'Acute Bronchitis');
+  // AQI-related diseases (only for unhealthy air quality)
+  if (aqiValue >= 150) {
+    diseases.push('Asthma Exacerbation', 'Chronic Obstructive Pulmonary Disease (COPD)', 'Acute Bronchitis', 'Respiratory Distress');
+  } else if (aqiValue >= 100) {
+    diseases.push('Asthma Exacerbation', 'Acute Bronchitis');
   }
 
-  if (weather?.temperature > 35) {
-    diseases.push('Heat Stroke', 'Heat Exhaustion', 'Dehydration');
-  } else if (weather?.temperature < 15) {
-    diseases.push('Hypothermia', 'Common Cold', 'Influenza', 'Pneumonia');
+  // Heat-related diseases (ONLY for high temperatures ≥ 35°C)
+  if (temp >= 40) {
+    diseases.push('Heat Stroke', 'Heat Exhaustion', 'Severe Dehydration', 'Heat Cramps');
+  } else if (temp >= 35) {
+    diseases.push('Heat Exhaustion', 'Dehydration', 'Heat Cramps');
   }
+  // DO NOT suggest heat-related diseases below 35°C
 
-  if (weather?.humidity > 80) {
+  // Cold-related diseases (ONLY for low temperatures ≤ 10°C)
+  if (temp <= 5) {
+    diseases.push('Hypothermia', 'Frostbite', 'Common Cold', 'Influenza', 'Pneumonia');
+  } else if (temp <= 10) {
+    diseases.push('Common Cold', 'Influenza', 'Pneumonia');
+  }
+  // DO NOT suggest cold-related diseases above 10°C
+
+  // Humidity-related diseases
+  if (weather?.humidity >= 85) {
     diseases.push('Fungal Skin Infections', 'Dermatophytosis');
   }
 
-  if (weather?.precipitation > 5) {
+  // Precipitation-related diseases
+  if (weather?.precipitation >= 20) {
     diseases.push('Waterborne Diseases', 'Vector-borne Diseases');
+  } else if (weather?.precipitation >= 5) {
+    diseases.push('Vector-borne Diseases');
   }
 
+  // Default if no specific conditions match
   return diseases.length > 0 ? diseases : ['Upper Respiratory Tract Infection'];
 }
 

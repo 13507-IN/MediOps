@@ -1,8 +1,19 @@
+// backend/src/models/User.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema(
   {
+    firstName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    lastName: {
+      type: String,
+      default: '',
+      trim: true
+    },
     email: {
       type: String,
       required: true,
@@ -15,37 +26,46 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       minlength: 6,
-      select: false, // Don't return password by default
+      select: false,
     },
-    firstName: {
+    // Fields from Doctor model
+    telegramChatId: {
       type: String,
-      default: '',
+      default: null
     },
-    lastName: {
+    specialization: {
       type: String,
-      default: '',
+      default: null
     },
     isActive: {
       type: Boolean,
-      default: true,
+      default: true
+    },
+    // Additional common fields
+    phone: {
+      type: String,
+      trim: true
     },
     lastLogin: {
       type: Date,
-      default: null,
-    },
+      default: null
+    }
   },
   {
     timestamps: true,
+    toJSON: {
+      transform: function(doc, ret) {
+        delete ret.password; // Never return password in responses
+        return ret;
+      }
+    }
   }
 );
 
-// Hash password before saving
-userSchema.pre('save', async function (next) {
-  // Only hash if password is new or modified
-  if (!this.isModified('password')) {
-    return next();
-  }
-
+// Password hashing middleware
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -56,17 +76,9 @@ userSchema.pre('save', async function (next) {
 });
 
 // Method to compare passwords
-userSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
-};
-
-// Method to get user without password
-userSchema.methods.toJSON = function () {
-  const obj = this.toObject();
-  delete obj.password;
-  return obj;
+userSchema.methods.matchPassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
 const User = mongoose.model('User', userSchema);
-
 export default User;

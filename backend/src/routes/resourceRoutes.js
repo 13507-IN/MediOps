@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth.js';
 import Resource from '../models/Resource.js';
 import { extractTextFromPDF, processPDFWithGemini, analyzeResourcePDF } from '../services/geminiService.js';
 import { GEMINI_MODEL } from '../utils/geminiConfig.js';
+import { extractCityName, autoCorrectCityName } from '../utils/locationUtils.js';
 
 const router = express.Router();
 
@@ -248,8 +249,28 @@ router.get('/aggregated', requireAuth, async (req, res) => {
       });
     }
 
+    // Get hospital info from the latest resource
+    const latestResource = resources[0];
+    const hospitalInfo = latestResource.resourceData || {};
+    
+    // Extract city from address if city is not directly provided
+    let city = hospitalInfo.city;
+    if (!city && hospitalInfo.hospitalAddress) {
+      // Use locationUtils to extract city from address
+      city = extractCityName(hospitalInfo.hospitalAddress);
+      if (city) {
+        city = autoCorrectCityName(city);
+      }
+    } else if (city) {
+      // Auto-correct the city name if provided
+      city = autoCorrectCityName(city);
+    }
+    
     // Aggregate all resource data
     const aggregated = {
+      hospitalName: hospitalInfo.hospitalName || null,
+      hospitalAddress: hospitalInfo.hospitalAddress || null,
+      city: city || null,
       doctors: [],
       nurses: [],
       inventory: {

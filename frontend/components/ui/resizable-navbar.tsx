@@ -15,7 +15,7 @@ interface NavbarProps {
 interface NavBodyProps {
   children: React.ReactNode
   className?: string
-  visible?: boolean
+  isScrolled?: boolean
 }
 
 interface NavItemsProps {
@@ -31,7 +31,7 @@ interface NavItemsProps {
 interface MobileNavProps {
   children: React.ReactNode
   className?: string
-  visible?: boolean
+  isScrolled?: boolean
 }
 
 interface MobileNavHeaderProps {
@@ -52,48 +52,83 @@ export const Navbar = ({ children, className }: NavbarProps) => {
     target: ref,
     offset: ["start start", "end start"],
   })
-  const [visible, setVisible] = useState<boolean>(false)
+  const [isScrolled, setIsScrolled] = useState<boolean>(false)
 
   useMotionValueEvent(scrollY, "change", (latest) => {
-    if (latest > 100) {
-      setVisible(true)
-    } else {
-      setVisible(false)
-    }
+    setIsScrolled(latest > 50) // Reduced threshold for earlier effect
   })
 
   return (
-    <motion.div ref={ref} className={cn("sticky inset-x-0 top-0 z-40 w-full", className)}>
-      {React.Children.map(children, (child) =>
-        React.isValidElement(child)
-          ? React.cloneElement(child as React.ReactElement<{ visible?: boolean }>, { visible })
-          : child,
+    <motion.div 
+      ref={ref} 
+      className={cn(
+        "sticky inset-x-0 top-0 z-50 w-full transition-all duration-300",
+        isScrolled ? "py-1" : "py-4", // Reduced padding when scrolled
+        isScrolled ? "shadow-lg" : "shadow-none",
+        className
       )}
+      style={{
+        backgroundColor: isScrolled ? 'rgba(15, 23, 42, 0.9)' : 'transparent',
+        backdropFilter: isScrolled ? 'blur(12px)' : 'none',
+        transform: isScrolled ? 'translateY(0)' : 'translateY(0)',
+        margin: isScrolled ? '1rem' : '0',
+        borderRadius: isScrolled ? '12px' : '0',
+        maxWidth: isScrolled ? 'calc(100% - 2rem)' : '100%',
+        marginLeft: isScrolled ? 'auto' : '0',
+        marginRight: isScrolled ? 'auto' : '0',
+      }}
+      animate={{
+        opacity: isScrolled ? 0.98 : 1,
+        scale: isScrolled ? 0.98 : 1,
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 300,
+        damping: 25,
+      }}
+    >
+      {React.Children.map(children, (child) => {
+        if (React.isValidElement(child)) {
+          const childProps: any = {};
+          if (child.type === NavBody || child.type === MobileNav) {
+            childProps.isScrolled = isScrolled;
+          }
+          return React.cloneElement(child, { ...childProps, key: 'nav-child' });
+        }
+        return child;
+      })}
     </motion.div>
   )
 }
 
-export const NavBody = ({ children, className, visible }: NavBodyProps) => {
+export const NavBody = ({ children, className, isScrolled = false, ...props }: NavBodyProps) => {
+  const motionProps = React.useMemo(() => ({
+    initial: { y: 0, width: "100%" },
+    animate: {
+      width: isScrolled ? "100%" : "100%",
+      y: isScrolled ? 0 : 0,
+      padding: isScrolled ? '0.25rem 1rem' : '0.75rem 1.5rem',
+    },
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 25,
+    },
+  }), [isScrolled]);
+
   return (
     <motion.div
-      animate={{
-        backdropFilter: visible ? "blur(10px)" : "none",
-        boxShadow: visible
-          ? "0 0 24px rgba(34, 42, 53, 0.06), 0 1px 1px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(34, 42, 53, 0.04), 0 0 4px rgba(34, 42, 53, 0.08), 0 16px 68px rgba(47, 48, 55, 0.05), 0 1px 0 rgba(255, 255, 255, 0.1) inset"
-          : "none",
-        width: visible ? "90%" : "100%",
-        y: visible ? 10 : 0,
-      }}
-      transition={{
-        type: "spring",
-        stiffness: 200,
-        damping: 50,
-      }}
+      {...motionProps}
       className={cn(
-        "relative z-[60] mx-auto flex w-full max-w-7xl flex-row items-center justify-between rounded-full bg-transparent px-4 py-3 lg:flex dark:bg-transparent",
-        visible && "bg-white/80 dark:bg-neutral-950/80",
+        "relative z-[60] mx-auto flex flex-row items-center justify-between rounded-full transition-all duration-300",
+        isScrolled ? "bg-white/90 dark:bg-neutral-950/90" : "bg-transparent",
+        isScrolled ? "shadow-sm" : "shadow-none",
         className,
       )}
+      style={{
+        maxWidth: isScrolled ? "100%" : "100%",
+        borderRadius: isScrolled ? '9999px' : '9999px',
+      }}
     >
       {children}
     </motion.div>
@@ -148,30 +183,19 @@ export const NavItems = ({ items, className, onItemClick, pathname }: NavItemsPr
   )
 }
 
-export const MobileNav = ({ children, className, visible }: MobileNavProps) => {
+export const MobileNav = ({ children, className, isScrolled = false, ...props }: MobileNavProps) => {
   return (
     <motion.div
-      animate={{
-        backdropFilter: visible ? "blur(10px)" : "none",
-        boxShadow: visible
-          ? "0 0 24px rgba(34, 42, 53, 0.06), 0 1px 1px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(34, 42, 53, 0.04), 0 0 4px rgba(34, 42, 53, 0.08), 0 16px 68px rgba(47, 48, 55, 0.05), 0 1px 0 rgba(255, 255, 255, 0.1) inset"
-          : "none",
-        width: visible ? "90%" : "100%",
-        paddingRight: visible ? "12px" : "0px",
-        paddingLeft: visible ? "12px" : "0px",
-        borderRadius: visible ? "4px" : "2rem",
-        y: visible ? 10 : 0,
-      }}
-      transition={{
-        type: "spring",
-        stiffness: 200,
-        damping: 50,
-      }}
       className={cn(
-        "relative z-50 mx-auto flex w-full max-w-[calc(100vw-2rem)] flex-col items-center justify-between bg-transparent px-0 py-2 lg:hidden",
-        visible && "bg-white/80 dark:bg-neutral-950/80",
+        "relative z-50 mx-auto flex flex-col items-center justify-between bg-transparent px-0 py-2 lg:hidden transition-all duration-300",
+        isScrolled ? "bg-white/80 dark:bg-neutral-950/80" : "bg-transparent",
         className,
       )}
+      style={{
+        maxWidth: isScrolled ? "95%" : "calc(100vw - 2rem)",
+        borderRadius: isScrolled ? "1rem" : "2rem",
+        padding: isScrolled ? "0.5rem" : "0",
+      }}
     >
       {children}
     </motion.div>
@@ -218,33 +242,44 @@ export const MobileNavToggle = ({
 
 export const NavbarLogo = () => {
   return (
-    <a href="/" className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-        HC
+    <a href="/" className="relative z-20 flex items-center space-x-2 px-2 py-1">
+      <div className="flex items-center justify-center h-9 w-9 overflow-hidden">
+        <img 
+          src="/logo.png" 
+          alt="MediOps Logo" 
+          className="h-10 w-10 object-contain"
+        />
       </div>
-      <span className="font-bold text-black dark:text-white">HealthCare</span>
+      <span className="text-lg font-bold text-black dark:text-white">MediOps</span>
     </a>
   )
 }
 
 type NavbarButtonVariant = "primary" | "secondary" | "dark" | "gradient"
 
-interface NavbarButtonProps {
-  href?: string
-  as?: React.ElementType
+interface NavbarButtonSharedProps {
   children: React.ReactNode
   className?: string
   variant?: NavbarButtonVariant
 }
 
-export const NavbarButton = ({
-  href,
-  as: Tag = "a",
-  children,
-  className = '',
-  variant = "primary",
-  ...props
-}: NavbarButtonProps) => {
+type NavbarButtonAnchorProps = NavbarButtonSharedProps &
+  React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string
+  }
+
+type NavbarButtonButtonProps = NavbarButtonSharedProps &
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    href?: never
+  }
+
+type NavbarButtonProps = NavbarButtonAnchorProps | NavbarButtonButtonProps
+
+const isAnchorNavbarButton = (props: NavbarButtonProps): props is NavbarButtonAnchorProps => {
+  return typeof (props as NavbarButtonAnchorProps).href === "string"
+}
+
+export const NavbarButton = (props: NavbarButtonProps) => {
   const baseStyles =
     "px-4 py-2 rounded-md bg-white button bg-white text-black text-sm font-bold relative cursor-pointer hover:-translate-y-0.5 transition duration-200 inline-block text-center"
 
@@ -257,11 +292,21 @@ export const NavbarButton = ({
       "bg-gradient-to-b from-blue-500 to-blue-700 text-white shadow-[0px_2px_0px_0px_rgba(255,255,255,0.3)_inset]",
   }
 
-  const Component = href ? "a" : "button"
+  if (isAnchorNavbarButton(props)) {
+    const { children, className = "", variant = "primary", href, ...anchorProps } = props
+
+    return (
+      <a href={href} className={cn(baseStyles, variantStyles[variant], className)} {...anchorProps}>
+        {children}
+      </a>
+    )
+  }
+
+  const { children, className = "", variant = "primary", ...buttonProps } = props
 
   return (
-    <Component href={href || undefined} className={cn(baseStyles, variantStyles[variant], className)} {...props}>
+    <button className={cn(baseStyles, variantStyles[variant], className)} {...buttonProps}>
       {children}
-    </Component>
+    </button>
   )
 }

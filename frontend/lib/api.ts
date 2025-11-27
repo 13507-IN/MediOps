@@ -485,6 +485,9 @@ export async function deleteResource(
 export async function getAggregatedResources(
   token: string
 ): Promise<ApiResponse<{
+  hospitalName?: string | null;
+  hospitalAddress?: string | null;
+  city?: string | null;
   doctors: Array<{ name: string; available_days: string; time: string }>;
   nurses: Array<{ name: string; available_days: string; time: string }>;
   inventory: Resource['resourceData']['inventory'];

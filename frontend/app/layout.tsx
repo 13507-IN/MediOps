@@ -15,9 +15,29 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Healthcare Dashboard",
-  description: "Healthcare Management System",
+  title: "MediOps - Healthcare Management System",
+  description: "AI-powered healthcare management system that predicts patient surges and optimizes resources",
   generator: "v0.app",
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+    apple: '/logo.png',
+  },
+  openGraph: {
+    title: 'MediOps - Healthcare Management System',
+    description: 'AI-powered healthcare management system that predicts patient surges and optimizes resources',
+    url: 'https://mediops.vercel.app',
+    siteName: 'MediOps',
+    images: [
+      {
+        url: '/logo.png',
+        width: 800,
+        height: 600,
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
+  },
 }
 
 export default function RootLayout({

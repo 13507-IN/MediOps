@@ -3,7 +3,9 @@ import { requireAuth } from '../middleware/auth.js';
 import { generatePrediction, getLatestPrediction, getPredictionHistory } from '../services/predictionService.js';
 import { getLatestAqi, getLatestWeather, getAqiHistory, getWeatherHistory, fetchAndStoreAqi, fetchAndStoreWeather } from '../services/dataService.js';
 import { generatePDFReport } from '../services/pdfReportService.js';
-import { extractCityName, isValidCityName } from '../utils/locationUtils.js';
+import { extractCityName, isValidCityName, autoCorrectCityName } from '../utils/locationUtils.js';
+import { sendPredictionToUser } from "../utils/sendPredictionToUser.js";
+import User from "../models/User.js";
 
 const router = express.Router();
 
@@ -16,11 +18,8 @@ router.post('/predict', requireAuth, async (req, res) => {
   try {
     let { city, date, lat, lon } = req.body;
 
-    // If city is not provided, try to detect from lat/lon or use default
     if (!city) {
       if (lat && lon) {
-        // TODO: Implement reverse geocoding to get city from lat/lon
-        // For now, require city name
         return res.status(400).json({
           success: false,
           message: 'City name is required. Automatic location detection from coordinates is not yet implemented.',
@@ -32,8 +31,8 @@ router.post('/predict', requireAuth, async (req, res) => {
       });
     }
 
-    // Normalize city name
     city = extractCityName(city);
+    city = autoCorrectCityName(city);
     if (!isValidCityName(city)) {
       return res.status(400).json({
         success: false,
@@ -41,22 +40,33 @@ router.post('/predict', requireAuth, async (req, res) => {
       });
     }
 
-    // Fetch fresh data when user provides input (force fetch)
     try {
       await fetchAndStoreAqi(city, '', 'India', true);
       await fetchAndStoreWeather(city, true);
     } catch (fetchError) {
       console.error(`Error fetching data for ${city}:`, fetchError.message);
-      // Continue with cached data if available
     }
 
     const predictionDate = date ? new Date(date) : new Date();
     const prediction = await generatePrediction(city, predictionDate);
 
+    // Send Telegram notification if user has Telegram linked
+    try {
+      const user = await User.findById(req.user.id);
+      if (user && user.telegramChatId) {
+        await sendPredictionToUser(user._id, prediction);
+        console.log(`Telegram notification sent to user ${user.email}`);
+      }
+    } catch (telegramErr) {
+      // Don't fail the request if Telegram notification fails
+      console.error("Telegram notification failed:", telegramErr.message);
+    }
+
     res.json({
       success: true,
       data: prediction,
     });
+
   } catch (error) {
     console.error('Prediction error:', error);
     res.status(500).json({
@@ -65,6 +75,7 @@ router.post('/predict', requireAuth, async (req, res) => {
     });
   }
 });
+
 
 /**
  * GET /api/predictions/latest
@@ -92,6 +103,7 @@ router.get('/latest', requireAuth, async (req, res) => {
 
     // Normalize city name
     city = extractCityName(city);
+    city = autoCorrectCityName(city);
     if (!isValidCityName(city)) {
       return res.status(400).json({
         success: false,
@@ -192,6 +204,7 @@ router.get('/history', requireAuth, async (req, res) => {
     }
 
     city = extractCityName(city);
+    city = autoCorrectCityName(city);
     if (!isValidCityName(city)) {
       return res.status(400).json({
         success: false,
@@ -231,6 +244,7 @@ router.get('/air-quality', requireAuth, async (req, res) => {
     }
 
     city = extractCityName(city);
+    city = autoCorrectCityName(city);
     if (!isValidCityName(city)) {
       return res.status(400).json({
         success: false,
@@ -282,6 +296,7 @@ router.get('/weather', requireAuth, async (req, res) => {
     }
 
     city = extractCityName(city);
+    city = autoCorrectCityName(city);
     if (!isValidCityName(city)) {
       return res.status(400).json({
         success: false,
@@ -336,6 +351,7 @@ router.get('/staff-advice', requireAuth, async (req, res) => {
     }
 
     city = extractCityName(city);
+    city = autoCorrectCityName(city);
     if (!isValidCityName(city)) {
       return res.status(400).json({
         success: false,
@@ -378,6 +394,7 @@ router.get('/supply-advice', requireAuth, async (req, res) => {
     }
 
     city = extractCityName(city);
+    city = autoCorrectCityName(city);
     if (!isValidCityName(city)) {
       return res.status(400).json({
         success: false,
@@ -420,6 +437,7 @@ router.get('/download', requireAuth, async (req, res) => {
     }
 
     city = extractCityName(city);
+    city = autoCorrectCityName(city);
     if (!isValidCityName(city)) {
       return res.status(400).json({
         success: false,
@@ -445,6 +463,3 @@ router.get('/download', requireAuth, async (req, res) => {
 });
 
 export default router;
-
-
-

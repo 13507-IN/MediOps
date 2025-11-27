@@ -225,8 +225,15 @@ Output MUST be valid JSON with keys:
 }
 
 Based on the context data (AQI, weather, surge probability), suggest:
-- Medicines that may be needed (e.g., for respiratory issues if AQI is high, ORS for heat, antibiotics for cold weather)
-- Diseases that may spike (e.g., respiratory infections for high AQI, heat stroke for high temperature, flu for cold weather)
+- Medicines that may be needed (e.g., for respiratory issues if AQI ≥ 100, ORS for heat ONLY if temperature ≥ 35°C, antibiotics for cold weather ONLY if temperature ≤ 10°C)
+- Diseases that may spike (e.g., respiratory infections for AQI ≥ 100, heat stroke ONLY if temperature ≥ 35°C, flu for cold weather ONLY if temperature ≤ 10°C)
+
+IMPORTANT: Be realistic with suggestions:
+- Heat-related conditions ONLY for temperatures ≥ 35°C
+- Cold-related conditions ONLY for temperatures ≤ 10°C
+- Respiratory conditions from AQI ONLY for AQI ≥ 100
+- Do NOT suggest heat stroke for temperatures below 30°C
+- Do NOT suggest hypothermia for temperatures above 10°C
 
 Context (may be empty):
 ${contextBlock}
@@ -290,15 +297,20 @@ Your task is to read the extracted text from a hospital inventory or daily resou
 
 From the text, extract and identify the following:
 
-1. Doctor Information:
+1. Hospital Information:
+   - Hospital name (if mentioned)
+   - Hospital address (full address if available)
+   - City name (extract from address or location mentioned)
+
+2. Doctor Information:
    - Doctor names
    - Their weekly availability (days + timings if mentioned)
 
-2. Nurse Information:
+3. Nurse Information:
    - Nurse names
    - Weekly availability (days + timings if available)
 
-3. Inventory Count:
+4. Inventory Count:
    - Medicines (list each medicine and count)
    - Saline (count)
    - Injections (count)
@@ -325,6 +337,9 @@ From the text, extract and identify the following:
 Return all results strictly in the following JSON structure:
 
 {
+  "hospitalName": "",
+  "hospitalAddress": "",
+  "city": "",
   "doctors": [
     { "name": "", "available_days": "", "time": "" }
   ],
@@ -393,6 +408,9 @@ ${text}
 
     // Validate and normalize the structure
     const normalizedData = {
+      hospitalName: resourceData.hospitalName || null,
+      hospitalAddress: resourceData.hospitalAddress || null,
+      city: resourceData.city || null,
       doctors: Array.isArray(resourceData.doctors) ? resourceData.doctors : [],
       nurses: Array.isArray(resourceData.nurses) ? resourceData.nurses : [],
       inventory: {

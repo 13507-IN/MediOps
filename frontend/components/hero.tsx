@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+
 import { BackgroundRippleEffect } from "@/components/ui/background-ripple-effect"
 
 export default function Hero() {
@@ -24,10 +26,13 @@ export default function Hero() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button className="px-8 py-3 border border-foreground bg-transparent text-foreground dark:border-white relative group transition duration-200 rounded-lg font-medium">
-            <div className="absolute -bottom-2 -right-2 bg-accent h-full w-full -z-10 group-hover:bottom-0 group-hover:right-0 transition-all duration-200 rounded-lg" />
+          <Link
+            href="/sign-up"
+            className="px-8 py-3 border border-foreground bg-transparent text-foreground dark:border-black relative group transition duration-200 rounded-lg font-medium"
+          >
+            <div className="absolute bottom-0 right-0 bg-accent h-full w-full -z-10 group-hover:bottom-0 group-hover:right-0 transition-all duration-200 rounded-lg" />
             <span className="relative">Get Started</span>
-          </button>
+          </Link>
           <button className="px-8 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors">
             Learn More
           </button>

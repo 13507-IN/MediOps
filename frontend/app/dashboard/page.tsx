@@ -11,6 +11,9 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  Edit2,
+  Check,
+  X,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -25,6 +28,7 @@ export default function Dashboard() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [allocations, setAllocations] = useState<any[]>([])
   const [resources, setResources] = useState<any>(null)
+  const [hospitalName, setHospitalName] = useState<string>("Hospital Name")
   const [loading, setLoading] = useState(true)
   const [allocationLoading, setAllocationLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -33,6 +37,8 @@ export default function Dashboard() {
   const [expandedDocs, setExpandedDocs] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState("")
   const allocationSectionRef = useRef<HTMLDivElement>(null)
+  const [isEditingHospitalName, setIsEditingHospitalName] = useState(false)
+  const [editingHospitalName, setEditingHospitalName] = useState("")
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -58,6 +64,20 @@ export default function Dashboard() {
       const response = await getDocuments(token, { limit: 10 })
       if (response.success && response.data) {
         setDocuments(response.data.documents)
+        
+        // Extract hospital name from first document
+        if (response.data.documents.length > 0) {
+          const firstDoc = response.data.documents[0]
+          if (firstDoc.extractedData?.hospitalName) {
+            setHospitalName(firstDoc.extractedData.hospitalName)
+          }
+        }
+        
+        // Check localStorage for saved hospital name
+        const savedHospitalName = localStorage.getItem('hospitalName')
+        if (savedHospitalName) {
+          setHospitalName(savedHospitalName)
+        }
       }
     } catch (error) {
       console.error("Error fetching documents:", error)
@@ -326,14 +346,87 @@ export default function Dashboard() {
     })
   }
 
+  const handleStartEditHospitalName = () => {
+    setEditingHospitalName(hospitalName)
+    setIsEditingHospitalName(true)
+  }
+
+  const handleSaveHospitalName = () => {
+    if (editingHospitalName.trim()) {
+      setHospitalName(editingHospitalName.trim())
+      localStorage.setItem('hospitalName', editingHospitalName.trim())
+      setIsEditingHospitalName(false)
+      toast({
+        title: "Success",
+        description: "Hospital name updated",
+      })
+    }
+  }
+
+  const handleCancelEditHospitalName = () => {
+    setIsEditingHospitalName(false)
+    setEditingHospitalName("")
+  }
+
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-background to-muted p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">St. Aurora General Hospital</h1>
+          <div className="flex items-center gap-3 mb-2">
+            {isEditingHospitalName ? (
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  value={editingHospitalName}
+                  onChange={(e) => setEditingHospitalName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSaveHospitalName()
+                    } else if (e.key === 'Escape') {
+                      handleCancelEditHospitalName()
+                    }
+                  }}
+                  className="text-4xl font-bold text-foreground bg-background border-2 border-primary rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Enter hospital name"
+                  aria-label="Hospital name"
+                  title="Hospital name"
+                  autoFocus
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleSaveHospitalName}
+                  className="h-8 w-8"
+                >
+                  <Check className="w-4 h-4 text-green-600" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleCancelEditHospitalName}
+                  className="h-8 w-8"
+                >
+                  <X className="w-4 h-4 text-destructive" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-4xl font-bold text-foreground">{hospitalName}</h1>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleStartEditHospitalName}
+                  className="h-8 w-8"
+                  title="Edit hospital name"
+                >
+                  <Edit2 className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                </Button>
+              </>
+            )}
+          </div>
           <p className="text-muted-foreground">
-            123 Health Ave, Wellness City, 560001 • +91-80-1234-5678 • info@staurora.org
+            Resource Management & Patient Allocation System
           </p>
         </div>
 

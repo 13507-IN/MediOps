@@ -6,7 +6,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { AgentChatPanel } from "@/components/agent-chat"
 import { DiseaseMedicineChat } from "@/components/disease-medicine-chat"
 import { useAuth } from "@/lib/auth-context"
-import { getLatestPrediction, getPredictionHistory, downloadPredictions, generatePrediction, type Prediction, type AqiReading, type WeatherReading } from "@/lib/api"
+import { getLatestPrediction, getPredictionHistory, downloadPredictions, generatePrediction, getAggregatedResources, type Prediction, type AqiReading, type WeatherReading } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { Download, RefreshCw, Loader2, MapPin, Navigation } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,28 @@ export default function Predictions() {
   const [history, setHistory] = useState<Prediction[]>([])
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number; city: string } | null>(null)
   const [locationLoading, setLocationLoading] = useState(false)
+
+  // Fetch city from resources on mount
+  useEffect(() => {
+    const fetchCityFromResources = async () => {
+      if (token && isAuthenticated && !cityInput) {
+        try {
+          const resourcesRes = await getAggregatedResources(token)
+          if (resourcesRes.success && resourcesRes.data?.city) {
+            setCityInput(resourcesRes.data.city)
+            toast({
+              title: "City auto-filled",
+              description: `City set to ${resourcesRes.data.city} from hospital address`,
+            })
+          }
+        } catch (error) {
+          console.error("Error fetching city from resources:", error)
+        }
+      }
+    }
+    fetchCityFromResources()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isAuthenticated])
 
   // Get user's live location
   const getCurrentLocation = () => {
@@ -101,7 +123,7 @@ export default function Predictions() {
   }
 
   const handleSubmitCity = async () => {
-    const city = cityInput.trim()
+    let city = cityInput.trim()
     if (!city) {
       toast({
         title: "City required",
@@ -109,6 +131,28 @@ export default function Predictions() {
         variant: "destructive",
       })
       return
+    }
+
+    // Auto-correct city name on the frontend (basic correction)
+    const cityCorrections: Record<string, string> = {
+      'kolkato': 'Kolkata',
+      'kolkatta': 'Kolkata',
+      'calcutta': 'Kolkata',
+      'bombay': 'Mumbai',
+      'new delhi': 'Delhi',
+      'bengaluru': 'Bangalore',
+      'madras': 'Chennai',
+      'cochin': 'Kochi',
+      'mysuru': 'Mysore',
+    }
+    const correctedCity = cityCorrections[city.toLowerCase()] || city
+    if (correctedCity !== city) {
+      setCityInput(correctedCity)
+      city = correctedCity
+      toast({
+        title: "City corrected",
+        description: `Corrected to: ${correctedCity}`,
+      })
     }
 
     if (!token || !isAuthenticated) {

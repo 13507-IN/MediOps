@@ -142,16 +142,16 @@ async function startServer() {
     
     const server = app.listen(availablePort, () => {
       console.log(`
-╔════════════════════════════════════════════════════════╗
-║                                                        ║
-║   🏥 Healthcare Backend Server                        ║
-║                                                        ║
-║   🚀 Server running on port ${availablePort}                      ║
-║   🌍 Environment: ${process.env.NODE_ENV || 'development'}                    ║
-║   📡 API Base URL: http://localhost:${availablePort}              ║
-║   🌤️ Weather API: ${process.env.WEATHER_API_KEY ? '✅ Configured' : '❌ Not configured'}     ║
-║                                                        ║
-╚════════════════════════════════════════════════════════╝
+
+                                                        
+   🏥 Healthcare Backend Server                        
+                                                        
+   🚀 Server running on port ${availablePort}                      
+   🌍 Environment: ${process.env.NODE_ENV || 'development'}                    
+   📡 API Base URL: http://localhost:${availablePort}              
+   🌤️ Weather API: ${process.env.WEATHER_API_KEY ? '✅ Configured' : '❌ Not configured'}     
+                                                        
+
       `);
     });
 

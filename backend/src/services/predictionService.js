@@ -13,31 +13,62 @@ import { GEMINI_MODEL } from '../utils/geminiConfig.js';
 
 /**
  * Calculate surge probability based on features
+ * Uses weighted scoring system to prevent absurd numbers
  */
 function calculateSurgeProbability(features) {
-  let probability = 20; // Base probability
+  let score = 0;
+  const maxScore = 100;
 
-  // AQI impact
-  if (features.aqi > 150) probability += 25;
-  else if (features.aqi > 100) probability += 15;
-  else if (features.aqi > 50) probability += 5;
+  // AQI impact (0-30 points)
+  if (features.aqi >= 300) score += 30; // Hazardous
+  else if (features.aqi >= 200) score += 25; // Very Unhealthy
+  else if (features.aqi >= 150) score += 20; // Unhealthy
+  else if (features.aqi >= 100) score += 12; // Unhealthy for Sensitive Groups
+  else if (features.aqi >= 50) score += 5; // Moderate
+  // Below 50 is good, no points added
 
-  // Weather impact
-  if (features.temperature > 35) probability += 15; // Heat waves
-  if (features.humidity > 80) probability += 10; // High humidity
-  if (features.precipitation > 5) probability += 5; // Rain
+  // Temperature impact (0-25 points)
+  // Extreme heat (40°C+) - highest risk
+  if (features.temperature >= 40) score += 25;
+  // Very hot (35-40°C) - high risk
+  else if (features.temperature >= 35) score += 18;
+  // Hot (30-35°C) - moderate risk
+  else if (features.temperature >= 30) score += 10;
+  // Cold weather (below 10°C) - moderate risk
+  else if (features.temperature < 10) score += 12;
+  // Very cold (below 5°C) - higher risk
+  else if (features.temperature < 5) score += 18;
+  // Normal temperatures (10-30°C) - minimal risk
+  else score += 2;
 
-  // Historical admissions impact
-  if (features.admissionsLast7dAvg > features.baselineAdmissions * 1.2) {
-    probability += 20;
-  }
+  // Humidity impact (0-10 points)
+  if (features.humidity >= 90) score += 10; // Very high humidity
+  else if (features.humidity >= 80) score += 6; // High humidity
+  else if (features.humidity < 30) score += 4; // Very low humidity (dry conditions)
 
-  // Festival impact
+  // Precipitation impact (0-8 points)
+  if (features.precipitation >= 50) score += 8; // Heavy rain/flooding
+  else if (features.precipitation >= 20) score += 5; // Moderate rain
+  else if (features.precipitation >= 5) score += 3; // Light rain
+
+  // Historical admissions impact (0-20 points)
+  const admissionRatio = features.admissionsLast7dAvg / features.baselineAdmissions;
+  if (admissionRatio >= 2.0) score += 20; // Double the baseline
+  else if (admissionRatio >= 1.5) score += 15; // 50% above baseline
+  else if (admissionRatio >= 1.2) score += 10; // 20% above baseline
+  else if (admissionRatio >= 1.0) score += 5; // At or above baseline
+
+  // Festival impact (0-10 points)
   if (features.isFestival) {
-    probability += features.festivalMultiplier * 10;
+    score += Math.min(10, features.festivalMultiplier * 5);
   }
 
-  return Math.min(100, Math.max(0, probability));
+  // Normalize to 0-100 probability
+  // Use a sigmoid-like curve to prevent extreme values
+  const normalized = Math.min(100, Math.max(0, score));
+  
+  // Apply smoothing to prevent sudden jumps
+  return Math.round(normalized);
 }
 
 /**
@@ -102,6 +133,12 @@ export async function generatePrediction(cityName, date = new Date()) {
       ? admissionsLast7d.reduce((a, b) => a + b, 0) / admissionsLast7d.length
       : 50;
 
+    // Calculate dynamic baseline based on historical data
+    // If we have historical data, use the average; otherwise use a reasonable default
+    const baselineAdmissions = admissionsLast7d.length > 0
+      ? Math.max(30, Math.min(100, admissionsLast7dAvg * 0.8)) // 80% of recent average, bounded
+      : 50; // Default baseline
+
     // Validate that we have required data
     if (!aqi || !weather) {
       throw new Error(`Missing data for city ${cityName}. AQI and Weather data are required.`);
@@ -119,7 +156,7 @@ export async function generatePrediction(cityName, date = new Date()) {
       windSpeed: weather.windSpeed,
       precipitation: weather.precipitation,
       admissionsLast7dAvg,
-      baselineAdmissions: 50,
+      baselineAdmissions,
       isFestival: false,
       festivalMultiplier: 0,
     };
@@ -161,9 +198,20 @@ export async function generatePrediction(cityName, date = new Date()) {
     // Combine medicines from conditions and pandemics
     const allMedicines = [...new Set([...suggestedMedicines, ...pandemicMedicines])];
 
-    // Calculate estimated patient count using pandemic data
-    const baselinePatients = 100; // Base patient count
-    const estimatedPatientCount = await calculatePatientCountFromPandemics(cityName, baselinePatients, surgeProbability);
+    // Calculate estimated FUTURE patient count based on current conditions
+    // This predicts NEW patients that may arrive, NOT accumulated historical cases
+    // Base patient count represents typical daily admissions
+    const basePatientCount = Math.max(30, Math.min(150, baselineAdmissions));
+    
+    // Calculate future patient count based on:
+    // 1. Baseline admissions (historical average)
+    // 2. Current surge probability (environmental factors)
+    // 3. Active pandemics (new cases rate, not accumulated cases)
+    const estimatedPatientCount = await calculatePatientCountFromPandemics(
+      cityName, 
+      basePatientCount, 
+      surgeProbability
+    );
 
     // Create prediction record (using cityName as region for backward compatibility with schema)
     const prediction = new Prediction({
@@ -174,15 +222,17 @@ export async function generatePrediction(cityName, date = new Date()) {
       modelVersion: GEMINI_MODEL,
       inputSnapshot: features,
       staffAdvice: {
-        doctors: Math.ceil(10 * (1 + surgeProbability / 100)),
-        nurses: Math.ceil(20 * (1 + surgeProbability / 100)),
-        supportStaff: Math.ceil(5 * (1 + surgeProbability / 100)),
+        // More realistic staffing calculations
+        doctors: Math.max(5, Math.ceil(8 + (surgeProbability / 100) * 12)),
+        nurses: Math.max(10, Math.ceil(15 + (surgeProbability / 100) * 25)),
+        supportStaff: Math.max(3, Math.ceil(4 + (surgeProbability / 100) * 8)),
         notes: agentResponse.staffingPlan || 'Standard staffing levels',
       },
       supplyAdvice: {
-        oxygen: Math.ceil(1000 * (1 + surgeProbability / 100)),
+        // More realistic supply calculations
+        oxygen: Math.max(500, Math.ceil(800 + (surgeProbability / 100) * 700)),
         medicines: allMedicines,
-        ppe: Math.ceil(500 * (1 + surgeProbability / 100)),
+        ppe: Math.max(200, Math.ceil(300 + (surgeProbability / 100) * 400)),
         notes: agentResponse.supplyPlan || 'Standard supply levels',
       },
       topFactors: [
