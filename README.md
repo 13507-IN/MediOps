@@ -1,268 +1,128 @@
-# MediOps - Healthcare Management System
+<!-- Improved README for clarity and faster onboarding -->
+# MediOps — Healthcare Management Platform
 
-A comprehensive healthcare management system with AI-powered PDF OCR processing, predictive analytics, and real-time monitoring.
+A full-stack healthcare management platform with PDF OCR (Google Vision), resource & document management, and predictive analytics. This repo contains both the backend (Express) and the frontend (Next.js) used by MediOps.
 
-## 🌟 Features
+## Highlights
+- PDF upload + OCR (Google Cloud Vision)
+- Clerk authentication
+- MongoDB data store (Mongoose models)
+- Dashboard with analytics and prediction components
+- Modern frontend (Next.js + TypeScript + Tailwind)
 
-### Core Features
-- **🔐 Clerk Authentication** - Secure user authentication and session management
-- **📄 PDF Upload & OCR** - Upload medical documents (5MB-10MB) and extract text using Google Cloud Vision API
-- **💾 MongoDB Database** - Store documents, OCR results, and extracted medical data
-- **📊 Dashboard** - Real-time healthcare analytics and document management
-- **🔍 Data Extraction** - Automatic extraction of medical terms, dates, emails, and phone numbers
-- **📈 Predictive Analytics** - Patient volume forecasting and air quality correlation
-- **🎨 Modern UI** - Beautiful, responsive design with dark mode support
+## Quick links
+- Backend docs: `backend/README.md`
+- Setup notes: `SETUP.md` and `QUICKSTART.md`
 
-### Technical Features
-- **Next.js 15** - React framework with App Router
-- **Express.js Backend** - RESTful API with async OCR processing
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first styling
-- **Recharts** - Data visualization
-- **Radix UI** - Accessible component primitives
+## Quick start (development)
+Follow these steps to run the app locally.
 
-## 🚀 Quick Start
-
-### Prerequisites
+Prerequisites
 - Node.js 18+
 - MongoDB (local or Atlas)
-- Google Cloud Platform account (for Vision API)
-- Clerk account (for authentication)
+- Google Cloud project with Vision API enabled (service account JSON)
+- Clerk account for authentication
 
-### Installation
+Backend
+1. Open a terminal and install dependencies:
 
-1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd healthcare-landing
-```
+	cd backend
+	npm install
 
-2. **Backend Setup**
-```bash
-cd backend
-npm install
+2. Create an env file from the example and fill in secrets:
 
-# Create .env file (see backend/.env.example)
-cp .env.example .env
+	cp .env.example .env
+	# edit .env and add MONGODB_URI, Clerk keys, GOOGLE_APPLICATION_CREDENTIALS, etc.
 
-# Add your credentials to .env
-# - MongoDB URI
-# - Clerk API keys
-# - Google Cloud Vision credentials
+3. Start the backend in dev mode:
 
-# Start the backend server
-npm run dev
-```
+	npm run dev
 
-3. **Frontend Setup**
-```bash
-cd frontend
-npm install
+Frontend
+1. In a separate terminal, install frontend deps:
 
-# Create .env.local file (see frontend/.env.example)
-cp .env.example .env.local
+	cd frontend
+	npm install
 
-# Add your credentials to .env.local
-# - Clerk API keys
-# - Backend API URL
+2. Add a local env file:
 
-# Start the frontend
-npm run dev
-```
+	cp .env.example .env.local
+	# add Clerk publishable key, NEXT_PUBLIC_API_URL (e.g. http://localhost:5000)
 
-4. **Access the Application**
+3. Start the Next.js dev server:
+
+	npm run dev
+
+By default:
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
+- Backend: http://localhost:5000
 
-## 📚 Documentation
+## Environment variables (overview)
+See the `.env.example` files in `backend/` and `frontend/` for the full list. Key variables include:
+- BACKEND: PORT, MONGODB_URI, GOOGLE_APPLICATION_CREDENTIALS, FRONTEND_URL, MAX_FILE_SIZE
+- FRONTEND: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY, NEXT_PUBLIC_API_URL
 
-### Key Documentation
-- [Backend API Documentation](./backend/README.md)
-- [Quick Start Guide](./QUICKSTART.md)
-- Environment configuration examples in `.env.example` files
-
-## 🏗️ Project Structure
+## Project layout
 
 ```
-healthcare-landing/
-├── backend/                    # Express.js backend
-│   ├── src/
-│   │   ├── config/            # Database configuration
-│   │   ├── models/            # MongoDB schemas
-│   │   ├── middleware/        # Authentication middleware
-│   │   ├── routes/            # API routes
-│   │   ├── services/          # OCR and business logic
-│   │   └── server.js          # Express server
-│   ├── uploads/               # Uploaded PDF files
-│   └── package.json
-│
-├── frontend/                   # Next.js frontend
-│   ├── app/                   # App router pages
-│   │   ├── dashboard/         # Dashboard with analytics
-│   │   ├── upload/            # PDF upload interface
-│   │   ├── predictions/       # Predictive analytics
-│   │   └── resources/         # Resource management
-│   ├── components/            # React components
-│   ├── lib/                   # Utilities and API client
-│   ├── middleware.ts          # Clerk route protection
-│   └── package.json
-│
-├── SETUP.md                   # Detailed setup guide
-└── README.md                  # This file
+/backend    # Express API, OCR integration, Mongoose models, uploads
+  /src
+  package.json
+
+/frontend   # Next.js (app router), components, pages, styles
+  package.json
+
+SETUP.md, QUICKSTART.md, backend/README.md
 ```
 
-## 🔧 Configuration
+## APIs (examples)
+- GET /health — health check
+- POST /api/documents/upload — upload PDF (multipart/form-data, auth required)
+- GET /api/documents — list documents (auth required)
+- GET /api/documents/:id — fetch document details
+- DELETE /api/documents/:id — remove document
 
-### Environment Variables
+See `backend/README.md` for full API docs and payload examples.
 
-**Backend (.env)**
-```env
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/healthcare-db
-CLERK_PUBLISHABLE_KEY=your_key
-CLERK_SECRET_KEY=your_secret
-GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
-FRONTEND_URL=http://localhost:3000
-MAX_FILE_SIZE=10485760
-```
+## Development tips
+- Use a local MongoDB or MongoDB Atlas for easy setup.
+- Ensure `GOOGLE_APPLICATION_CREDENTIALS` points to the service account JSON for Vision API.
+- When adding new environment variables, update the examples in each `backend`/`frontend` folder.
 
-**Frontend (.env.local)**
-```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_key
-CLERK_SECRET_KEY=your_secret
-NEXT_PUBLIC_API_URL=http://localhost:5000
-```
-.....
-## 🎯 Usage
+## Testing
+Run tests (if present) inside each package:
 
-### Upload PDF Documents
-1. Sign in to your account
-2. Navigate to "Upload PDF"
-3. Drag and drop or select a PDF file (5MB-10MB)
-4. Wait for OCR processing to complete
-5. View results on the dashboard
+Backend:
 
-### View Dashboard
-- Real-time healthcare metrics
-- Patient volume forecasts
-- Air quality correlation
-- Processed documents with extracted data
-- Active alerts and notifications
+  cd backend
+  npm test
 
-### API Endpoints
+Frontend:
 
-```bash
-# Health check
-GET /health
+  cd frontend
+  npm test
 
-# Upload PDF
-POST /api/documents/upload
-Headers: Authorization: Bearer <token>
-Body: multipart/form-data with 'pdf' field
+## Deployment
+- Backend: deploy to Cloud providers (Railway, Render, Heroku). Provide env vars and connect to MongoDB Atlas.
+- Frontend: deploy to Vercel or Netlify. Configure Clerk redirect URLs and environment variables.
 
-# Get all documents
-GET /api/documents
-Headers: Authorization: Bearer <token>
+## Contributing
+1. Fork the repo
+2. Create a branch: `git checkout -b feat/your-feature`
+3. Commit and push
+4. Open a PR describing the change and any migration notes
 
-# Get specific document
-GET /api/documents/:id
-Headers: Authorization: Bearer <token>
+Please follow the existing code style and add tests for new business logic.
 
-# Delete document
-DELETE /api/documents/:id
-Headers: Authorization: Bearer <token>
-```
-
-## 🛠️ Technology Stack
-
-### Frontend
-- **Framework**: Next.js 15.2.4
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **UI Components**: Radix UI, shadcn/ui
-- **Charts**: Recharts
-- **Authentication**: Clerk
-- **State Management**: React Hooks
-
-### Backend
-- **Runtime**: Node.js
-- **Framework**: Express.js
-- **Database**: MongoDB with Mongoose
-- **Authentication**: Clerk SDK
-- **OCR**: Google Cloud Vision API
-- **File Upload**: Multer
-
-## 📦 Dependencies
-
-### Key Frontend Dependencies
-- `@clerk/nextjs` - Authentication
-- `next` - React framework
-- `recharts` - Data visualization
-- `@radix-ui/*` - UI primitives
-- `tailwindcss` - Styling
-
-### Key Backend Dependencies
-- `express` - Web framework
-- `mongoose` - MongoDB ODM
-- `@clerk/clerk-sdk-node` - Authentication
-- `@google-cloud/vision` - OCR processing
-- `multer` - File uploads
-
-## 🧪 Testing
-
-```bash
-# Backend tests
-cd backend
-npm test
-
-# Frontend tests
-cd frontend
-npm test
-```
-
-## 🚢 Deployment
-
-### Backend
-- Deploy to Railway, Render, or Heroku
-- Set environment variables
-- Connect to MongoDB Atlas
-- Configure Google Cloud credentials
-
-### Frontend
-- Deploy to Vercel or Netlify
-- Set environment variables
-- Update Clerk redirect URLs
-- Update CORS settings in backend
-
-## 🔒 Security
-
-- All routes protected with Clerk authentication
-- File upload validation (type and size)
-- User-scoped data access
-- Secure credential management
-- CORS configuration
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a pull request
-
-## 📄 License
-
+## License
 ISC
 
-## 🆘 Support
+## Support
+If you get stuck, check:
+- `SETUP.md` and `QUICKSTART.md` for environment-specific steps
+- `backend/README.md` for API details
 
-For setup help, see [SETUP.md](./SETUP.md)
+If you still need help, open an issue describing the problem and environment (OS, Node version, error output).
 
-For API documentation, see [backend/README.md](./backend/README.md)
-
-## 🙏 Acknowledgments
-
-- Clerk for authentication
-- Google Cloud Vision for OCR
-- MongoDB for database
-- Vercel for Next.js framework
+---
+Updated: improved onboarding, shorter Quick Start, and clearer links to existing documentation.
