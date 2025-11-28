@@ -11,6 +11,10 @@ const documentSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    hospitalId: {
+      type: String,
+      index: true,
+    },
     fileName: {
       type: String,
       required: true,
@@ -61,6 +65,7 @@ const documentSchema = new mongoose.Schema(
 
 // Index for faster queries
 documentSchema.index({ userId: 1, createdAt: -1 });
+documentSchema.index({ hospitalId: 1, createdAt: -1 });
 documentSchema.index({ processingStatus: 1 });
 
 const Document = mongoose.model('Document', documentSchema);

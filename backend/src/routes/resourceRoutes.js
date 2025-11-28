@@ -61,6 +61,7 @@ router.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
     const resource = new Resource({
       userId: req.user.id,
       userEmail: req.user.email,
+      hospitalId: req.user.hospitalId,
       fileName: req.file.originalname,
       fileSize: req.file.size,
       filePath: req.file.path,
@@ -145,13 +146,19 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const { limit = 50, page = 1 } = req.query;
 
-    const resources = await Resource.find({ userId: req.user.id })
+    const resources = await Resource.find({ 
+      userId: req.user.id,
+      hospitalId: req.user.hospitalId 
+    })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .select('-filePath -extractedText'); // Don't expose file path and full text
 
-    const total = await Resource.countDocuments({ userId: req.user.id });
+    const total = await Resource.countDocuments({ 
+      userId: req.user.id,
+      hospitalId: req.user.hospitalId 
+    });
 
     res.json({
       success: true,
@@ -180,7 +187,10 @@ router.get('/', requireAuth, async (req, res) => {
  */
 router.get('/latest', requireAuth, async (req, res) => {
   try {
-    const resource = await Resource.findOne({ userId: req.user.id })
+    const resource = await Resource.findOne({ 
+      userId: req.user.id,
+      hospitalId: req.user.hospitalId 
+    })
       .sort({ createdAt: -1 })
       .select('-filePath -extractedText');
 
@@ -212,6 +222,7 @@ router.get('/aggregated', requireAuth, async (req, res) => {
   try {
     const resources = await Resource.find({ 
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
       processingStatus: 'completed'
     })
       .sort({ createdAt: -1 })

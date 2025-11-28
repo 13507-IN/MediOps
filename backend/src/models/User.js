@@ -28,6 +28,18 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
+    hospitalName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    hospitalId: {
+      type: String,
+      required: true,
+      unique: true,
+      uppercase: true,
+      trim: true
+    },
     // Fields from Doctor model
     telegramChatId: {
       type: String,

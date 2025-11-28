@@ -24,6 +24,7 @@ router.post('/', requireAuth, async (req, res) => {
     const document = await Document.findOne({
       _id: documentId,
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
     });
 
     if (!document) {
@@ -36,6 +37,7 @@ router.post('/', requireAuth, async (req, res) => {
     // Get current available resources - fetch aggregated data to include all resources
     const allResources = await Resource.find({
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
       processingStatus: 'completed',
     }).sort({ createdAt: -1 });
 
@@ -214,6 +216,7 @@ router.post('/', requireAuth, async (req, res) => {
     const allocation = new Allocation({
       userId: req.user.id,
       userEmail: req.user.email,
+      hospitalId: req.user.hospitalId,
       documentId,
       patientInfo,
       prescriptionDetails,
@@ -259,6 +262,7 @@ router.post('/', requireAuth, async (req, res) => {
     // Get updated inventory for low stock checks (fetch fresh aggregated data)
     const allResourcesUpdated = await Resource.find({
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
       processingStatus: 'completed',
     }).sort({ createdAt: -1 });
 
@@ -387,7 +391,10 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const { limit = 20, page = 1, status } = req.query;
 
-    let query = { userId: req.user.id };
+    let query = { 
+      userId: req.user.id,
+      hospitalId: req.user.hospitalId 
+    };
     if (status) {
       query.status = status;
     }
@@ -463,6 +470,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     const allocation = await Allocation.findOne({
       _id: req.params.id,
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
     });
 
     if (!allocation) {
@@ -504,6 +512,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     const allocation = await Allocation.findOne({
       _id: req.params.id,
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
     });
 
     if (!allocation) {
@@ -516,6 +525,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     // Get all resources to add back the allocated items
     const allResourcesForDeallocation = await Resource.find({
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
       processingStatus: 'completed',
     }).sort({ createdAt: -1 });
 
@@ -580,6 +590,7 @@ router.post('/check-stock', requireAuth, async (req, res) => {
   try {
     const resourceData = await Resource.find({
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
       processingStatus: 'completed',
     });
 

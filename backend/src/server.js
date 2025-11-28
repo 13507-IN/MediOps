@@ -12,6 +12,7 @@ import diseaseMedicineRoutes from './routes/diseaseMedicineRoutes.js';
 import resourceRoutes from './routes/resourceRoutes.js';
 import allocationRoutes from './routes/allocationRoutes.js';
 import { startAqiScheduler } from './jobs/aqiScheduler.js';
+import autoRoutes from './routes/autoRoutes.js';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -42,6 +43,7 @@ const allowedOrigins = [
   "http://localhost:3001",
   "https://medi-ops-ten.vercel.app"
 ];
+
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -93,6 +95,10 @@ app.use('/api/resources', resourceRoutes);
 app.use('/api/allocations', allocationRoutes);
 
 // 404
+app.use(express.raw({ type: "*/*", limit: "50mb" }));
+app.use("/api/auto", autoRoutes);
+
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,

@@ -200,7 +200,11 @@ Consider seasonality, population density, and trend slope when estimating probab
 async function callGeminiForDetection(prompt) {
   if (!process.env.GEMINI_API_KEY) return null;
   try {
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const modelName = GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    if (!modelName || modelName.trim() === '') {
+      throw new Error('GEMINI_MODEL is not configured. Please set GEMINI_MODEL environment variable.');
+    }
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const result = await withRetry(
       async () => await model.generateContent(prompt, { timeout: CONFIG.GEMINI_TIMEOUT_MS }),

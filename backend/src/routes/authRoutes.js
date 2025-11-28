@@ -4,13 +4,42 @@ import { generateToken, verifyToken } from '../middleware/jwtAuth.js';
 
 const router = express.Router();
 
+// Helper function to normalize hospital ID
+const normalizeHospitalId = (value = '') => {
+  return value
+    .toString()
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '')
+    .substring(0, 20);
+};
+
+// Helper function to generate unique hospital ID
+const generateHospitalId = async (hospitalName) => {
+  const base = normalizeHospitalId(hospitalName) || 'HOSP';
+  let candidate;
+  let attempts = 0;
+
+  do {
+    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    candidate = `HOSP-${base.substring(0, 4)}${suffix}`;
+    const existing = await User.findOne({ hospitalId: candidate });
+    if (!existing) {
+      return candidate;
+    }
+    attempts += 1;
+  } while (attempts < 5);
+
+  return `HOSP-${Date.now().toString().slice(-6)}`;
+};
+
 /**
  * POST /api/auth/signup
  * Register a new user
  */
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password, firstName = '', lastName = '' } = req.body;
+    const { email, password, firstName = '', lastName = '', hospitalName, hospitalId } = req.body;
 
     // Validate input
     if (!email || !password) {
@@ -27,6 +56,14 @@ router.post('/signup', async (req, res) => {
       });
     }
 
+    // Validate hospital name
+    if (!hospitalName || !hospitalName.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hospital name is required',
+      });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -36,18 +73,37 @@ router.post('/signup', async (req, res) => {
       });
     }
 
+    // Generate or validate hospital ID
+    let finalHospitalId = hospitalId ? normalizeHospitalId(hospitalId) : null;
+    
+    if (!finalHospitalId) {
+      // Auto-generate hospital ID
+      finalHospitalId = await generateHospitalId(hospitalName);
+    } else {
+      // Check if hospital ID already exists
+      const existingHospital = await User.findOne({ hospitalId: finalHospitalId });
+      if (existingHospital) {
+        return res.status(409).json({
+          success: false,
+          message: 'Hospital ID already exists. Please choose a different one or leave it empty to auto-generate.',
+        });
+      }
+    }
+
     // Create new user
     const user = new User({
       email,
       password,
       firstName,
       lastName,
+      hospitalName: hospitalName.trim(),
+      hospitalId: finalHospitalId,
     });
 
     await user.save();
 
     // Generate token
-    const token = generateToken(user._id, user.email);
+    const token = generateToken(user);
 
     res.status(201).json({
       success: true,
@@ -57,6 +113,8 @@ router.post('/signup', async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        hospitalName: user.hospitalName,
+        hospitalId: user.hospitalId,
         token,
       },
     });
@@ -118,7 +176,7 @@ router.post('/login', async (req, res) => {
     await user.save();
 
     // Generate token
-    const token = generateToken(user._id, user.email);
+    const token = generateToken(user);
 
     res.json({
       success: true,
@@ -128,6 +186,8 @@ router.post('/login', async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        hospitalName: user.hospitalName,
+        hospitalId: user.hospitalId,
         token,
       },
     });

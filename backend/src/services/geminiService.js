@@ -57,7 +57,11 @@ export async function analyzePDFWithGemini(text) {
     }
 
     // Use Gemini model (defaults to gemini-1.5-flash for higher quotas)
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const modelName = GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    if (!modelName || modelName.trim() === '') {
+      throw new Error('GEMINI_MODEL is not configured. Please set GEMINI_MODEL environment variable.');
+    }
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const prompt = `
 You are a medical document analysis assistant. Analyze the following medical document text and extract structured information.
@@ -163,7 +167,11 @@ export async function askQuestionAboutPDF(text, question) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const modelName = GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    if (!modelName || modelName.trim() === '') {
+      throw new Error('GEMINI_MODEL is not configured. Please set GEMINI_MODEL environment variable.');
+    }
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const prompt = `
 You are a medical document assistant. Based on the following medical document, please answer the user's question accurately and concisely.
@@ -200,7 +208,10 @@ export async function runOperationsAgent(message, context = {}) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const modelName = GEMINI_MODEL;
+    const modelName = GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    if (!modelName || modelName.trim() === '') {
+      throw new Error('GEMINI_MODEL is not configured. Please set GEMINI_MODEL environment variable.');
+    }
     const model = genAI.getGenerativeModel({ model: modelName });
 
     const contextBlock = typeof context === 'string'
@@ -288,7 +299,11 @@ export async function analyzeResourcePDF(text) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const modelName = GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    if (!modelName || modelName.trim() === '') {
+      throw new Error('GEMINI_MODEL is not configured. Please set GEMINI_MODEL environment variable.');
+    }
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const prompt = `
 You are an advanced medical-document analysis assistant. 

@@ -23,12 +23,13 @@ import { ResourceAllocationForm } from "@/components/resource-allocation-form"
 
 export default function Dashboard() {
   const router = useRouter()
-  const { token, isAuthenticated, loading: authLoading } = useAuth()
+  const { token, isAuthenticated, loading: authLoading, user } = useAuth()
   const { toast } = useToast()
   const [documents, setDocuments] = useState<Document[]>([])
   const [allocations, setAllocations] = useState<any[]>([])
   const [resources, setResources] = useState<any>(null)
   const [hospitalName, setHospitalName] = useState<string>("Hospital Name")
+  const [hospitalId, setHospitalId] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [allocationLoading, setAllocationLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -53,8 +54,16 @@ export default function Dashboard() {
       fetchAllocations()
       fetchResources()
       checkStock()
+      
+      // Set hospital info from user context
+      if (user?.hospitalName) {
+        setHospitalName(user.hospitalName)
+      }
+      if (user?.hospitalId) {
+        setHospitalId(user.hospitalId)
+      }
     }
-  }, [isAuthenticated, token])
+  }, [isAuthenticated, token, user])
 
   const fetchDocuments = async () => {
     try {
@@ -425,9 +434,16 @@ export default function Dashboard() {
               </>
             )}
           </div>
-          <p className="text-muted-foreground">
-            Resource Management & Patient Allocation System
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-muted-foreground">
+              Resource Management & Patient Allocation System
+            </p>
+            {hospitalId && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">Hospital ID:</span> <span className="font-mono bg-muted px-2 py-1 rounded">{hospitalId}</span>
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Stats Cards */}

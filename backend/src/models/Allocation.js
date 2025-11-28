@@ -12,6 +12,11 @@ const allocationSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    hospitalId: {
+      type: String,
+      required: true,
+      index: true,
+    },
     documentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Document',
@@ -90,6 +95,7 @@ const allocationSchema = new mongoose.Schema(
 
 // Index for faster queries
 allocationSchema.index({ userId: 1, createdAt: -1 });
+allocationSchema.index({ hospitalId: 1, createdAt: -1 });
 allocationSchema.index({ documentId: 1 });
 allocationSchema.index({ status: 1 });
 

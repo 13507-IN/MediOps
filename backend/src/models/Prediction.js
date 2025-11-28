@@ -7,6 +7,10 @@ const predictionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    hospitalId: {
+      type: String,
+      index: true,
+    },
     date: {
       type: Date,
       required: true,

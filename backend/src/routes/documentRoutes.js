@@ -68,6 +68,7 @@ router.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
     const document = new Document({
       userId: req.user.id,
       userEmail: req.user.email,
+      ...(req.user.hospitalId && { hospitalId: req.user.hospitalId }),
       fileName: req.file.originalname,
       fileSize: req.file.size,
       mimeType: req.file.mimetype,
@@ -119,7 +120,10 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const { status, limit = 50, page = 1 } = req.query;
 
-    const query = { userId: req.user.id };
+    const query = { 
+      userId: req.user.id,
+      ...(req.user.hospitalId && { hospitalId: req.user.hospitalId })
+    };
     if (status) {
       query.processingStatus = status;
     }
@@ -162,6 +166,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     const document = await Document.findOne({
       _id: req.params.id,
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
     }).select('-filePath');
 
     if (!document) {
@@ -193,6 +198,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     const document = await Document.findOne({
       _id: req.params.id,
       userId: req.user.id,
+      hospitalId: req.user.hospitalId,
     });
 
     if (!document) {

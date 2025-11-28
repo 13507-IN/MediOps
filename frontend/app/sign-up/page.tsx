@@ -18,6 +18,8 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
+  const [hospitalName, setHospitalName] = useState("")
+  const [hospitalId, setHospitalId] = useState("")
   const [loading, setLoading] = useState(false)
 
   // Redirect if already authenticated
@@ -48,10 +50,19 @@ export default function SignUpPage() {
       return
     }
 
+    if (!hospitalName.trim()) {
+      toast({
+        title: "Error",
+        description: "Hospital name is required",
+        variant: "destructive",
+      })
+      return
+    }
+
     setLoading(true)
 
     try {
-      await signup(email, password, firstName, lastName)
+      await signup(email, password, firstName, lastName, hospitalName, hospitalId)
       toast({
         title: "Success",
         description: "Account created successfully",
@@ -119,6 +130,34 @@ export default function SignUpPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="hospitalName" className="text-sm font-medium">
+                Hospital Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="hospitalName"
+                type="text"
+                placeholder="Enter hospital name"
+                value={hospitalName}
+                onChange={(e) => setHospitalName(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="hospitalId" className="text-sm font-medium">
+                Hospital ID <span className="text-muted-foreground text-xs">(Optional - auto-generated if empty)</span>
+              </label>
+              <Input
+                id="hospitalId"
+                type="text"
+                placeholder="HOSP-XXXXX (leave empty to auto-generate)"
+                value={hospitalId}
+                onChange={(e) => setHospitalId(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                disabled={loading}
+                className="uppercase"
               />
             </div>
             <div className="space-y-2">

@@ -12,6 +12,11 @@ const resourceSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    hospitalId: {
+      type: String,
+      required: true,
+      index: true,
+    },
     fileName: {
       type: String,
       required: true,
@@ -88,6 +93,7 @@ const resourceSchema = new mongoose.Schema(
 
 // Indexes for faster queries
 resourceSchema.index({ userId: 1, createdAt: -1 });
+resourceSchema.index({ hospitalId: 1, createdAt: -1 });
 resourceSchema.index({ processingStatus: 1 });
 
 const Resource = mongoose.model('Resource', resourceSchema);

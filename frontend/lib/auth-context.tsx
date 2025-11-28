@@ -9,6 +9,8 @@ interface User {
   email: string;
   firstName?: string;
   lastName?: string;
+  hospitalName?: string;
+  hospitalId?: string;
 }
 
 interface AuthContextType {
@@ -16,7 +18,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, firstName?: string, lastName?: string) => Promise<void>;
+  signup: (email: string, password: string, firstName?: string, lastName?: string, hospitalName?: string, hospitalId?: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -80,10 +82,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       const data = await response.json();
-      const { token: newToken, userId, email: userEmail, firstName, lastName } = data.data;
+      const { token: newToken, userId, email: userEmail, firstName, lastName, hospitalName, hospitalId } = data.data;
 
       setToken(newToken);
-      setUser({ userId, email: userEmail, firstName, lastName });
+      setUser({ userId, email: userEmail, firstName, lastName, hospitalName, hospitalId });
       localStorage.setItem('authToken', newToken);
       
       // Store token in cookie for middleware (7 days)
@@ -95,7 +97,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const signup = async (email: string, password: string, firstName?: string, lastName?: string) => {
+  const signup = async (email: string, password: string, firstName?: string, lastName?: string, hospitalName?: string, hospitalId?: string) => {
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/auth/signup`, {
@@ -103,7 +105,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password, firstName, lastName }),
+        body: JSON.stringify({ email, password, firstName, lastName, hospitalName, hospitalId }),
       });
 
       if (!response.ok) {
@@ -112,10 +114,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       const data = await response.json();
-      const { token: newToken, userId, email: userEmail, firstName: fName, lastName: lName } = data.data;
+      const { token: newToken, userId, email: userEmail, firstName: fName, lastName: lName, hospitalName: hospName, hospitalId: hospId } = data.data;
 
       setToken(newToken);
-      setUser({ userId, email: userEmail, firstName: fName, lastName: lName });
+      setUser({ userId, email: userEmail, firstName: fName, lastName: lName, hospitalName: hospName, hospitalId: hospId });
       localStorage.setItem('authToken', newToken);
       
       // Store token in cookie for middleware (7 days)

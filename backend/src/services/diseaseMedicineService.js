@@ -14,7 +14,11 @@ export async function getDiseasesForConditions(weather, aqi, surgeProbability) {
       return getDefaultDiseases(weather, aqi);
     }
 
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const modelName = GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    if (!modelName || modelName.trim() === '') {
+      throw new Error('GEMINI_MODEL is not configured. Please set GEMINI_MODEL environment variable.');
+    }
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const temp = weather?.temperature || 0;
     const aqiValue = aqi?.aqi || 0;
@@ -85,7 +89,11 @@ export async function getMedicinesForDiseases(diseases, weather, aqi) {
       return getDefaultMedicines(weather, aqi);
     }
 
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const modelName = GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    if (!modelName || modelName.trim() === '') {
+      throw new Error('GEMINI_MODEL is not configured. Please set GEMINI_MODEL environment variable.');
+    }
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const prompt = `
 You are a medical expert. Based on the following diseases and conditions, provide a list of REAL medicine names (use proper pharmaceutical names):
@@ -215,7 +223,11 @@ export async function chatAboutDiseaseMedicine(question, context = {}) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const modelName = GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    if (!modelName || modelName.trim() === '') {
+      throw new Error('GEMINI_MODEL is not configured. Please set GEMINI_MODEL environment variable.');
+    }
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     const contextInfo = context.weather || context.aqi 
       ? `\n\nCurrent Conditions:\n${JSON.stringify(context, null, 2)}`
