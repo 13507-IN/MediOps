@@ -185,3 +185,4 @@ NEXT_PUBLIC_API_URL=http://localhost:5000
 - Auth middleware maintains same interface
 - Document filtering by userId remains the same
 - No database schema changes needed (except User collection)
+.....

@@ -132,7 +132,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_key
 CLERK_SECRET_KEY=your_secret
 NEXT_PUBLIC_API_URL=http://localhost:5000
 ```
-
+.....
 ## 🎯 Usage
 
 ### Upload PDF Documents
