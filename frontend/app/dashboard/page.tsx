@@ -472,7 +472,7 @@ export default function Dashboard() {
               <div className="text-3xl font-bold text-foreground">
                 {documents.filter(d => d.processingStatus === 'completed').length}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Completed with Gemini analysis</p>
+              <p className="text-xs text-muted-foreground mt-1">Completed with AI Agent analysis</p>
             </CardContent>
           </Card>
         </div>

@@ -104,7 +104,7 @@ export default function UploadPage() {
 
     toast({
       title: "Uploading...",
-      description: "Your PDF is being uploaded and analyzed with Gemini AI.",
+      description: "Your PDF is being uploaded and analyzed with AI Agent.",
     })
 
     try {

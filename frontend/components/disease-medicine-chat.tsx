@@ -151,7 +151,7 @@ export function DiseaseMedicineChat({ region }: DiseaseMedicineChatProps) {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
               {isAuthenticated
-                ? "Powered by Gemini AI • Provides medical information and suggestions"
+                ? "Using AI Agent • Provides medical information and suggestions"
                 : "Sign in to use the medical chatbot"}
             </p>
             <Button onClick={sendMessage} disabled={loading || !isAuthenticated}>

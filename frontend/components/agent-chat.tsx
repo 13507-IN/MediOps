@@ -191,7 +191,7 @@ export function AgentChatPanel({ region, timeRange, dataType }: AgentChatPanelPr
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
-              {isAuthenticated ? "Responses generated with Gemini" : "Sign in to enable MediOps AI"}
+              {isAuthenticated ? "Responses generated using Ai Agent" : "Sign in to enable MediOps AI"}
             </p>
             <Button onClick={sendMessage} disabled={loading || !isAuthenticated}>
               {loading ? (
