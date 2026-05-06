@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { getDocuments, deleteDocument, getAllocations, deallocateResources, checkStockLevels, getAggregatedResources, type Document } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { useSSE } from "@/hooks/use-sse"
 import { ResourceAllocationForm } from "@/components/resource-allocation-form"
 
 export default function Dashboard() {
@@ -40,6 +41,64 @@ export default function Dashboard() {
   const allocationSectionRef = useRef<HTMLDivElement>(null)
   const [isEditingHospitalName, setIsEditingHospitalName] = useState(false)
   const [editingHospitalName, setEditingHospitalName] = useState("")
+
+  const { isConnected: sseConnected, on: onSSE } = useSSE(token)
+
+  // SSE event handlers
+  useEffect(() => {
+    if (!token) return
+
+    onSSE("document:completed", (data) => {
+      console.log("📡 SSE: Document completed", data.documentId)
+      fetchDocuments()
+      toast({
+        title: "Document Processed",
+        description: data.message || "Document analysis completed",
+      })
+    })
+
+    onSSE("document:failed", (data) => {
+      console.log("📡 SSE: Document failed", data.documentId)
+      fetchDocuments()
+      toast({
+        title: "Processing Failed",
+        description: data.error || "Document processing failed",
+        variant: "destructive",
+      })
+    })
+
+    onSSE("allocation:created", (data) => {
+      console.log("📡 SSE: Allocation created", data.allocation?._id)
+      fetchAllocations()
+      fetchResources()
+      checkStock()
+      toast({
+        title: "Resources Allocated",
+        description: data.message || "Resources allocated successfully",
+      })
+    })
+
+    onSSE("allocation:deallocated", (data) => {
+      console.log("📡 SSE: Allocation deallocated", data.allocation?._id)
+      fetchAllocations()
+      fetchResources()
+      checkStock()
+      toast({
+        title: "Resources Deallocated",
+        description: data.message || "Resources returned to inventory",
+      })
+    })
+
+    onSSE("alert:low-stock", (data) => {
+      console.log("📡 SSE: Low stock alert", data.items)
+      checkStock()
+      toast({
+        title: "Low Stock Alert",
+        description: data.message || "Some items are running low",
+        variant: "destructive",
+      })
+    })
+  }, [token, onSSE, toast])
 
   // Redirect if not authenticated
   useEffect(() => {
