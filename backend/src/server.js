@@ -13,6 +13,7 @@ import resourceRoutes from './routes/resourceRoutes.js';
 import allocationRoutes from './routes/allocationRoutes.js';
 import { startAqiScheduler } from './jobs/aqiScheduler.js';
 import autoRoutes from './routes/autoRoutes.js';
+import sseRoutes from './routes/sseRoutes.js';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -93,6 +94,7 @@ app.use('/api/predictions', predictionRoutes);
 app.use('/api/disease-medicine', diseaseMedicineRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/allocations', allocationRoutes);
+app.use('/api/sse', sseRoutes);
 
 // 404
 app.use(express.raw({ type: "*/*", limit: "50mb" }));
