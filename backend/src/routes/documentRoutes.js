@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import { requireAuth } from '../middleware/auth.js';
 import Document from '../models/Document.js';
 import { extractTextFromPDF, extractEntities } from '../services/ocrService.js';
+import { emitToUser } from '../utils/sseManager.js';
 
 const router = express.Router();
 
@@ -79,7 +80,7 @@ router.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
     await document.save();
 
     // Process OCR asynchronously
-    processOCR(document._id, req.file.path).catch(error => {
+    processOCR(document._id, req.file.path, req.user.id).catch(error => {
       console.error('OCR processing error:', error);
     });
 
@@ -234,9 +235,15 @@ router.delete('/:id', requireAuth, async (req, res) => {
 /**
  * Helper function to process OCR asynchronously
  */
-async function processOCR(documentId, filePath) {
+async function processOCR(documentId, filePath, userId) {
   try {
     console.log(`🔄 Starting OCR processing for document ${documentId}`);
+
+    emitToUser(userId, 'document:processing', {
+      documentId,
+      status: 'processing',
+      message: 'OCR processing started',
+    });
 
     // Extract text using Google Cloud Vision
     const ocrResult = await extractTextFromPDF(filePath);
@@ -245,7 +252,7 @@ async function processOCR(documentId, filePath) {
     const entities = extractEntities(ocrResult.text);
 
     // Update document with OCR results
-    await Document.findByIdAndUpdate(documentId, {
+    const updatedDoc = await Document.findByIdAndUpdate(documentId, {
       ocrText: ocrResult.text,
       ocrConfidence: ocrResult.confidence,
       processingStatus: 'completed',
@@ -259,16 +266,31 @@ async function processOCR(documentId, filePath) {
           ...entities.phones,
         ],
       },
-    });
+    }, { new: true }).select('-filePath');
 
     console.log(`✅ OCR processing completed for document ${documentId}`);
+
+    emitToUser(userId, 'document:completed', {
+      documentId,
+      document: updatedDoc,
+      status: 'completed',
+      confidence: ocrResult.confidence,
+      pageCount: ocrResult.pages,
+      message: 'OCR processing completed successfully',
+    });
   } catch (error) {
     console.error(`❌ OCR processing failed for document ${documentId}:`, error);
 
-    // Update document with error status
     await Document.findByIdAndUpdate(documentId, {
       processingStatus: 'failed',
       errorMessage: error.message,
+    });
+
+    emitToUser(userId, 'document:failed', {
+      documentId,
+      status: 'failed',
+      error: error.message,
+      message: 'OCR processing failed',
     });
   }
 }

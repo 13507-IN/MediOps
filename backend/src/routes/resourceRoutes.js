@@ -7,6 +7,7 @@ import Resource from '../models/Resource.js';
 import { extractTextFromPDF, processPDFWithGemini, analyzeResourcePDF } from '../services/geminiService.js';
 import { GEMINI_MODEL } from '../utils/geminiConfig.js';
 import { extractCityName, autoCorrectCityName } from '../utils/locationUtils.js';
+import { emitToUser } from '../utils/sseManager.js';
 
 const router = express.Router();
 
@@ -57,6 +58,11 @@ router.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
 
     console.log(`📤 Processing Resource PDF: ${req.file.originalname}`);
 
+    emitToUser(req.user.id, 'resource:uploading', {
+      fileName: req.file.originalname,
+      message: 'Resource PDF uploaded, starting analysis',
+    });
+
     // Create resource record in database
     const resource = new Resource({
       userId: req.user.id,
@@ -98,6 +104,12 @@ router.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
       // Fetch updated resource
       const updatedResource = await Resource.findById(resource._id).select('-filePath -extractedText');
 
+      emitToUser(req.user.id, 'resource:completed', {
+        resourceId: updatedResource._id,
+        resource: updatedResource,
+        message: 'Resource PDF analyzed successfully',
+      });
+
       res.status(200).json({
         success: true,
         message: 'Resource PDF analyzed successfully',
@@ -115,6 +127,12 @@ router.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
       await Resource.findByIdAndUpdate(resource._id, {
         processingStatus: 'failed',
         errorMessage: processingError.message,
+      });
+
+      emitToUser(req.user.id, 'resource:failed', {
+        resourceId: resource._id,
+        error: processingError.message,
+        message: 'Resource analysis failed',
       });
 
       throw processingError;
