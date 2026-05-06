@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import Allocation from '../models/Allocation.js';
 import Document from '../models/Document.js';
 import Resource from '../models/Resource.js';
+import { emitToUser } from '../utils/sseManager.js';
 
 const router = express.Router();
 
@@ -374,6 +375,21 @@ router.post('/', requireAuth, async (req, res) => {
         lowStockAlerts: lowStockItems,
       },
     });
+
+    // Emit SSE event for allocation created
+    emitToUser(req.user.id, 'allocation:created', {
+      allocation,
+      lowStockAlerts: lowStockItems,
+      message: `Resources allocated to ${patientInfo?.name || 'patient'}`,
+    });
+
+    // Emit low stock alerts if any
+    if (lowStockItems.length > 0) {
+      emitToUser(req.user.id, 'alert:low-stock', {
+        items: lowStockItems,
+        message: `Low stock alert: ${lowStockItems.map(i => i.item).join(', ')}`,
+      });
+    }
   } catch (error) {
     console.error('Create allocation error:', error);
     res.status(500).json({
@@ -572,6 +588,11 @@ router.delete('/:id', requireAuth, async (req, res) => {
       success: true,
       message: 'Resources deallocated successfully and returned to inventory',
       data: allocation,
+    });
+
+    emitToUser(req.user.id, 'allocation:deallocated', {
+      allocation,
+      message: `Resources deallocated for ${allocation.patientInfo?.name || 'patient'}`,
     });
   } catch (error) {
     console.error('Delete allocation error:', error);

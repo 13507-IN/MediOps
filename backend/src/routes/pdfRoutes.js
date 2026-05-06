@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth.js';
 import Document from '../models/Document.js';
 import { processPDFWithGemini, askQuestionAboutPDF } from '../services/geminiService.js';
 import { GEMINI_MODEL } from '../utils/geminiConfig.js';
+import { emitToUser } from '../utils/sseManager.js';
 
 const router = express.Router();
 
@@ -56,6 +57,12 @@ router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
 
     console.log(`📤 Processing PDF: ${req.file.originalname}`);
 
+    emitToUser(req.user.id, 'document:uploading', {
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      message: 'File uploaded, starting AI analysis',
+    });
+
     // Create document record in database
     const document = new Document({
       userId: req.user.id,
@@ -75,7 +82,7 @@ router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
       const result = await processPDFWithGemini(req.file.path);
 
       // Update document with results
-      await Document.findByIdAndUpdate(document._id, {
+      const updatedDoc = await Document.findByIdAndUpdate(document._id, {
         ocrText: result.extractedText,
         processingStatus: 'completed',
         extractedData: result.geminiAnalysis,
@@ -85,6 +92,15 @@ router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
           processingDate: result.processingDate,
           aiModel: GEMINI_MODEL,
         },
+      }, { new: true }).select('-filePath');
+
+      emitToUser(req.user.id, 'document:completed', {
+        documentId: document._id,
+        document: updatedDoc,
+        analysis: result.geminiAnalysis,
+        pageCount: result.pageCount,
+        status: 'completed',
+        message: 'PDF analyzed successfully',
       });
 
       res.status(200).json({
@@ -104,6 +120,13 @@ router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
       await Document.findByIdAndUpdate(document._id, {
         processingStatus: 'failed',
         errorMessage: processingError.message,
+      });
+
+      emitToUser(req.user.id, 'document:failed', {
+        documentId: document._id,
+        status: 'failed',
+        error: processingError.message,
+        message: 'PDF analysis failed',
       });
 
       throw processingError;

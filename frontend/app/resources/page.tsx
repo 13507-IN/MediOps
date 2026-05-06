@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { uploadResourcePDF, getAggregatedResources } from "@/lib/api"
+import { useSSE } from "@/hooks/use-sse"
 
 interface AggregatedResourceData {
   doctors: Array<{ name: string; available_days: string; time: string }>;
@@ -41,6 +42,33 @@ export default function Resources() {
   const [loading, setLoading] = useState(true)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+
+  const { isConnected: sseConnected, on: onSSE } = useSSE(token)
+
+  // SSE event handlers for real-time resource processing
+  useEffect(() => {
+    if (!token) return
+
+    onSSE("resource:completed", (data) => {
+      console.log("📡 SSE: Resource completed", data.resourceId)
+      fetchAggregatedResources()
+      setUploading(false)
+      toast({
+        title: "Resource Analyzed",
+        description: data.message || "Resource PDF processed successfully",
+      })
+    })
+
+    onSSE("resource:failed", (data) => {
+      console.log("📡 SSE: Resource failed", data.resourceId)
+      setUploading(false)
+      toast({
+        title: "Processing Failed",
+        description: data.error || "Resource analysis failed",
+        variant: "destructive",
+      })
+    })
+  }, [token, onSSE, toast])
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -124,31 +152,11 @@ export default function Resources() {
 
       toast({
         title: "Upload Successful",
-        description: "Resource PDF analyzed successfully. Data will appear shortly...",
+        description: "Resource PDF uploaded. AI analysis in progress...",
       })
 
-      // Poll for updated aggregated data
-      let attempts = 0
-      const pollInterval = setInterval(async () => {
-        attempts++
-        try {
-          const latestResponse = await getAggregatedResources(token)
-          if (latestResponse.success && latestResponse.data) {
-            setResourceData(latestResponse.data)
-            clearInterval(pollInterval)
-            setSelectedFile(null)
-            setUploading(false)
-          }
-        } catch (error) {
-          console.error("Polling error:", error)
-        }
-        
-        if (attempts > 30) {
-          clearInterval(pollInterval)
-          setUploading(false)
-          fetchAggregatedResources()
-        }
-      }, 1000)
+      setSelectedFile(null)
+      // SSE will handle completion and refresh automatically
     } catch (error) {
       console.error("Upload error:", error)
       toast({

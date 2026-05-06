@@ -7,6 +7,7 @@ import { Upload, FileText, CheckCircle, XCircle, Loader2, ArrowRight } from "luc
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { useSSE } from "@/hooks/use-sse"
 import Link from "next/link"
 
 interface UploadedFile {
@@ -30,6 +31,70 @@ export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
+
+  const { isConnected: sseConnected, on: onSSE } = useSSE(token)
+
+  // SSE event handlers for real-time processing updates
+  useEffect(() => {
+    if (!token) return
+
+    onSSE("document:processing", (data) => {
+      console.log("📡 SSE: Document processing", data.documentId)
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.documentId === data.documentId
+            ? { ...f, status: "uploading", message: "Processing with AI..." }
+            : f
+        )
+      )
+    })
+
+    onSSE("document:completed", (data) => {
+      console.log("📡 SSE: Document completed", data.documentId)
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.documentId === data.documentId
+            ? {
+                ...f,
+                status: "success",
+                message: data.message || "Analysis completed",
+                analysis: {
+                  documentType: data.analysis?.documentType || "Medical Document",
+                  summary: data.analysis?.summary || "",
+                  confidence: data.analysis?.confidence || "medium",
+                  pageCount: data.pageCount,
+                },
+                showDashboardButton: true,
+              }
+            : f
+        )
+      )
+      toast({
+        title: "Analysis Complete",
+        description: data.message || "Your document has been analyzed",
+      })
+    })
+
+    onSSE("document:failed", (data) => {
+      console.log("📡 SSE: Document failed", data.documentId)
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.documentId === data.documentId
+            ? {
+                ...f,
+                status: "error",
+                message: data.error || "Processing failed",
+              }
+            : f
+        )
+      )
+      toast({
+        title: "Processing Failed",
+        description: data.error || "Document analysis failed",
+        variant: "destructive",
+      })
+    })
+  }, [token, onSSE, toast])
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -132,20 +197,16 @@ export default function UploadPage() {
           f.file === currentFile
             ? {
                 ...f,
-                status: "success",
-                message: "PDF analyzed successfully",
-                documentId: data.data.documentId,
-                analysis: {
-                  documentType: data.data.analysis?.documentType || 'Medical Document',
-                  summary: data.data.analysis?.summary || data.data.extractedText?.substring(0, 200),
-                  confidence: data.data.analysis?.confidence || 'medium',
-                  pageCount: data.data.pageCount,
-                },
-                showDashboardButton: true,
+                documentId: data.data?.documentId,
+                status: "uploading",
+                message: "AI processing started...",
               }
             : f
         )
       )
+
+      // Wait for SSE to send completion event instead of updating here
+      // The SSE handler will update the status when processing completes
 
       toast({
         title: "Upload Successful",
