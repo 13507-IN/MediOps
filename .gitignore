@@ -63,3 +63,5 @@ backend/temp/
 backend/google-vision-credentials.json
 backend/package-lock.json
 ENV_VARIABLES.md
+
+updatePlan.txt

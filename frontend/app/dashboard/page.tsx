@@ -98,6 +98,17 @@ export default function Dashboard() {
         variant: "destructive",
       })
     })
+
+    onSSE("allocation:lifecycle-change", (data) => {
+      console.log("📡 SSE: Lifecycle change", data.allocationId)
+      fetchAllocations()
+      fetchResources()
+      checkStock()
+      toast({
+        title: "Patient Status Updated",
+        description: data.message || "Patient lifecycle status changed",
+      })
+    })
   }, [token, onSSE, toast])
 
   // Redirect if not authenticated
@@ -374,7 +385,6 @@ export default function Dashboard() {
 
       const response = await deallocateResources(token, allocationId)
       if (response.success) {
-        // Refresh all data after deallocation
         setTimeout(() => {
           fetchAllocations()
           checkStock()
@@ -391,6 +401,48 @@ export default function Dashboard() {
       toast({
         title: "Error",
         description: "Failed to deallocate resources",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleLifecycleTransition = async (allocationId: string, newStatus: string) => {
+    try {
+      if (!token) return
+
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+      const response = await fetch(`${API_URL}/api/allocations/${allocationId}/lifecycle`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        setTimeout(() => {
+          fetchAllocations()
+          checkStock()
+          fetchResources()
+        }, 500)
+        toast({
+          title: "Status Updated",
+          description: data.message || `Patient status changed to ${newStatus}`,
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to update status",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Lifecycle transition error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update patient status",
         variant: "destructive",
       })
     }
@@ -924,21 +976,55 @@ export default function Dashboard() {
                             {allocation.status === 'allocated' && <CheckCircle2 className="w-3 h-3 mr-1" />}
                             {allocation.status.charAt(0).toUpperCase() + allocation.status.slice(1)}
                           </span>
+                          {allocation.lifecycle?.status && (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              allocation.lifecycle.status === 'admitted' ? 'bg-blue-500/20 text-blue-600' :
+                              allocation.lifecycle.status === 'treated' ? 'bg-purple-500/20 text-purple-600' :
+                              allocation.lifecycle.status === 'discharged' ? 'bg-gray-500/20 text-gray-600' :
+                              'bg-yellow-500/20 text-yellow-600'
+                            }`}>
+                              {allocation.lifecycle.status.charAt(0).toUpperCase() + allocation.lifecycle.status.slice(1)}
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           Age: {allocation.patientInfo?.age || "N/A"} | Gender: {allocation.patientInfo?.gender || "N/A"}
                         </p>
                       </div>
-                      {allocation.status === 'allocated' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeallocate(allocation._id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          Deallocate
-                        </Button>
-                      )}
+                      <div className="flex gap-2 shrink-0">
+                        {allocation.status === 'allocated' && allocation.lifecycle?.status !== 'discharged' && (
+                          <>
+                            {allocation.lifecycle?.status === 'admitted' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleLifecycleTransition(allocation._id, 'treated')}
+                                className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border-purple-500/30"
+                              >
+                                Mark Treated
+                              </Button>
+                            )}
+                            {(allocation.lifecycle?.status === 'admitted' || allocation.lifecycle?.status === 'treated') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleLifecycleTransition(allocation._id, 'discharged')}
+                                className="bg-gray-500/10 hover:bg-gray-500/20 text-gray-600 border-gray-500/30"
+                              >
+                                Discharge
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeallocate(allocation._id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              Deallocate
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-3 p-3 bg-background rounded border border-border space-y-2">
@@ -977,9 +1063,20 @@ export default function Dashboard() {
                       )}
                     </div>
 
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Allocated: {new Date(allocation.createdAt).toLocaleDateString()}
-                    </p>
+                    <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                      {allocation.lifecycle?.admittedAt && (
+                        <span>Admitted: {new Date(allocation.lifecycle.admittedAt).toLocaleDateString()}</span>
+                      )}
+                      {allocation.lifecycle?.treatedAt && (
+                        <span>Treated: {new Date(allocation.lifecycle.treatedAt).toLocaleDateString()}</span>
+                      )}
+                      {allocation.lifecycle?.dischargedAt && (
+                        <span>Discharged: {new Date(allocation.lifecycle.dischargedAt).toLocaleDateString()}</span>
+                      )}
+                      {!allocation.lifecycle?.dischargedAt && (
+                        <span>Allocated: {new Date(allocation.createdAt).toLocaleDateString()}</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

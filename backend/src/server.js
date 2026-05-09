@@ -14,6 +14,7 @@ import allocationRoutes from './routes/allocationRoutes.js';
 import { startAqiScheduler } from './jobs/aqiScheduler.js';
 import autoRoutes from './routes/autoRoutes.js';
 import sseRoutes from './routes/sseRoutes.js';
+import inventoryRoutes from './routes/inventoryRoutes.js';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -95,6 +96,7 @@ app.use('/api/disease-medicine', diseaseMedicineRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/allocations', allocationRoutes);
 app.use('/api/sse', sseRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // 404
 app.use(express.raw({ type: "*/*", limit: "50mb" }));

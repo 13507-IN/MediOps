@@ -8,6 +8,7 @@ import { extractTextFromPDF, processPDFWithGemini, analyzeResourcePDF } from '..
 import { GEMINI_MODEL } from '../utils/geminiConfig.js';
 import { extractCityName, autoCorrectCityName } from '../utils/locationUtils.js';
 import { emitToUser } from '../utils/sseManager.js';
+import Inventory from '../models/Inventory.js';
 
 const router = express.Router();
 
@@ -103,6 +104,13 @@ router.post('/upload', requireAuth, upload.single('pdf'), async (req, res) => {
 
       // Fetch updated resource
       const updatedResource = await Resource.findById(resource._id).select('-filePath -extractedText');
+
+      // Sync inventory with resource data
+      try {
+        await syncInventoryFromResource(req.user.id, req.user.hospitalId, updatedResource);
+      } catch (syncError) {
+        console.error('Inventory sync error:', syncError.message);
+      }
 
       emitToUser(req.user.id, 'resource:completed', {
         resourceId: updatedResource._id,
@@ -521,4 +529,68 @@ router.delete('/:id', requireAuth, async (req, res) => {
 });
 
 export default router;
+
+async function syncInventoryFromResource(userId, hospitalId, resource) {
+  const resourceData = resource.resourceData || {};
+  const inventoryData = resourceData.inventory || {};
+
+  let inventory = await Inventory.findOne({ userId, hospitalId });
+
+  if (!inventory) {
+    inventory = new Inventory({
+      userId,
+      hospitalId,
+      hospitalName: resourceData.hospitalName,
+      city: resourceData.city,
+      beds: { general: 0, icu: 0, isolation: 0 },
+      equipment: {
+        oxygenCylinders: 0,
+        dialysisMachines: 0,
+        ecgMachines: 0,
+        ctScan: 0,
+        endoscopy: 0,
+        bpMachines: 0,
+        ultrasonography: 0,
+        xrayMachines: 0,
+      },
+      rooms: { ot: 0 },
+      supplies: { saline: 0, injections: 0, antibodies: 0 },
+      staff: { availableNurses: 0 },
+    });
+  }
+
+  inventory.hospitalName = resourceData.hospitalName || inventory.hospitalName;
+  inventory.city = resourceData.city || inventory.city;
+
+  if (inventoryData.general_beds !== undefined) inventory.beds.general = (inventory.beds.general || 0) + inventoryData.general_beds;
+  if (inventoryData.icu_beds !== undefined) inventory.beds.icu = (inventory.beds.icu || 0) + inventoryData.icu_beds;
+  if (inventoryData.isolation_beds !== undefined) inventory.beds.isolation = (inventory.beds.isolation || 0) + inventoryData.isolation_beds;
+  if (inventoryData.oxygen_cylinders !== undefined) inventory.equipment.oxygenCylinders = (inventory.equipment.oxygenCylinders || 0) + inventoryData.oxygen_cylinders;
+  if (inventoryData.dialysis_machines !== undefined) inventory.equipment.dialysisMachines = (inventory.equipment.dialysisMachines || 0) + inventoryData.dialysis_machines;
+  if (inventoryData.ecg_machines !== undefined) inventory.equipment.ecgMachines = (inventory.equipment.ecgMachines || 0) + inventoryData.ecg_machines;
+  if (inventoryData.ct_scan !== undefined) inventory.equipment.ctScan = (inventory.equipment.ctScan || 0) + inventoryData.ct_scan;
+  if (inventoryData.endoscopy !== undefined) inventory.equipment.endoscopy = (inventory.equipment.endoscopy || 0) + inventoryData.endoscopy;
+  if (inventoryData.bp_machines !== undefined) inventory.equipment.bpMachines = (inventory.equipment.bpMachines || 0) + inventoryData.bp_machines;
+  if (inventoryData.ultrasonography !== undefined) inventory.equipment.ultrasonography = (inventory.equipment.ultrasonography || 0) + inventoryData.ultrasonography;
+  if (inventoryData.xray_machines !== undefined) inventory.equipment.xrayMachines = (inventory.equipment.xrayMachines || 0) + inventoryData.xray_machines;
+  if (inventoryData.ot_rooms !== undefined) inventory.rooms.ot = (inventory.rooms.ot || 0) + inventoryData.ot_rooms;
+  if (inventoryData.saline !== undefined) inventory.supplies.saline = (inventory.supplies.saline || 0) + inventoryData.saline;
+  if (inventoryData.injections !== undefined) inventory.supplies.injections = (inventory.supplies.injections || 0) + inventoryData.injections;
+  if (inventoryData.antibodies !== undefined) inventory.supplies.antibodies = (inventory.supplies.antibodies || 0) + inventoryData.antibodies;
+  if (inventoryData.available_nurses_count !== undefined) inventory.staff.availableNurses = (inventory.staff.availableNurses || 0) + inventoryData.available_nurses_count;
+
+  inventory.lastSyncedFromResource = resource._id;
+  inventory.lastUpdatedBy = resource.userEmail;
+
+  inventory.transactionLog.push({
+    type: 'import',
+    itemName: 'all',
+    category: 'sync',
+    quantityChange: 0,
+    notes: `Synced from resource: ${resource.fileName}`,
+  });
+
+  await inventory.save();
+  return inventory;
+}
 
