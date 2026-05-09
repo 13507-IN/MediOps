@@ -78,6 +78,18 @@ const allocationSchema = new mongoose.Schema(
       enum: ['pending', 'allocated', 'deallocated', 'completed'],
       default: 'pending',
     },
+    lifecycle: {
+      status: {
+        type: String,
+        enum: ['admitted', 'treated', 'discharged'],
+        default: 'admitted',
+      },
+      admittedAt: Date,
+      treatedAt: Date,
+      dischargedAt: Date,
+      expectedDischarge: Date,
+      notes: String,
+    },
     notes: String,
     createdAt: {
       type: Date,
