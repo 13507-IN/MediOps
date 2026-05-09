@@ -103,3 +103,19 @@ export function getConnectedCount() {
   });
   return count;
 }
+
+export const SSE_EVENTS = Object.freeze({
+  CONNECTED: 'connected',
+  HEARTBEAT: 'heartbeat',
+  DOCUMENT_UPLOADING: 'document:uploading',
+  DOCUMENT_PROCESSING: 'document:processing',
+  DOCUMENT_COMPLETED: 'document:completed',
+  DOCUMENT_FAILED: 'document:failed',
+  RESOURCE_UPLOADING: 'resource:uploading',
+  RESOURCE_COMPLETED: 'resource:completed',
+  RESOURCE_FAILED: 'resource:failed',
+  ALLOCATION_CREATED: 'allocation:created',
+  ALLOCATION_DEALLOCATED: 'allocation:deallocated',
+  ALLOCATION_LIFECYCLE_CHANGE: 'allocation:lifecycle-change',
+  ALERT_LOW_STOCK: 'alert:low-stock',
+});

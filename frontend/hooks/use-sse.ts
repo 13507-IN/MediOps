@@ -30,7 +30,7 @@ export function useSSE(token: string | null): UseSSEReturn {
   const connect = useCallback(() => {
     if (!tokenRef.current || eventSourceRef.current) return
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"
     const url = `${API_URL}/api/sse`
 
     const es = new EventSource(url, {
@@ -122,6 +122,12 @@ export function useSSE(token: string | null): UseSSEReturn {
       const data = JSON.parse(e.data)
       setLastEvent({ type: "alert:low-stock", data })
       handlersRef.current["alert:low-stock"]?.(data)
+    })
+
+    es.addEventListener("allocation:lifecycle-change", (e) => {
+      const data = JSON.parse(e.data)
+      setLastEvent({ type: "allocation:lifecycle-change", data })
+      handlersRef.current["allocation:lifecycle-change"]?.(data)
     })
 
     eventSourceRef.current = es
