@@ -4,13 +4,12 @@ import path from 'path';
 import fs from 'fs/promises';
 import { requireAuth } from '../middleware/auth.js';
 import Document from '../models/Document.js';
-import { processPDFWithGemini, askQuestionAboutPDF } from '../services/geminiService.js';
-import { GEMINI_MODEL } from '../utils/geminiConfig.js';
+import { analyzeDocument } from '../services/documentService.js';
+import { askQuestionAboutPDF } from '../services/geminiService.js';
 import { emitToUser } from '../utils/sseManager.js';
 
 const router = express.Router();
 
-// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     const uploadDir = './uploads';
@@ -28,12 +27,11 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({
-  storage: storage,
+  storage,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB default
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
-    // Accept only PDF files
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
     } else {
@@ -44,7 +42,7 @@ const upload = multer({
 
 /**
  * POST /api/pdf/analyze
- * Upload and analyze a PDF file with Gemini AI
+ * Alias for unified document upload (uses same pipeline as /api/documents/upload)
  */
 router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
   try {
@@ -55,15 +53,14 @@ router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
       });
     }
 
-    console.log(`📤 Processing PDF: ${req.file.originalname}`);
+    console.log(`📤 Processing PDF via unified pipeline: ${req.file.originalname}`);
 
     emitToUser(req.user.id, 'document:uploading', {
       fileName: req.file.originalname,
       fileSize: req.file.size,
-      message: 'File uploaded, starting AI analysis',
+      message: 'File uploaded, starting unified analysis',
     });
 
-    // Create document record in database
     const document = new Document({
       userId: req.user.id,
       userEmail: req.user.email,
@@ -77,30 +74,34 @@ router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
 
     await document.save();
 
-    // Process PDF with Gemini
     try {
-      const result = await processPDFWithGemini(req.file.path);
+      const result = await analyzeDocument(req.file.path, {
+        useOCR: true,
+        useGemini: true,
+        fallbackToGemini: true,
+      });
 
-      // Update document with results
       const updatedDoc = await Document.findByIdAndUpdate(document._id, {
         ocrText: result.extractedText,
+        ocrConfidence: result.ocrConfidence,
         processingStatus: 'completed',
-        extractedData: result.geminiAnalysis,
+        extractedData: result.extractedData,
         metadata: {
           pageCount: result.pageCount,
-          pdfMetadata: result.pdfMetadata,
+          processingMethod: result.processingMethod,
+          aiModel: result.aiModel,
           processingDate: result.processingDate,
-          aiModel: GEMINI_MODEL,
         },
       }, { new: true }).select('-filePath');
 
       emitToUser(req.user.id, 'document:completed', {
         documentId: document._id,
         document: updatedDoc,
-        analysis: result.geminiAnalysis,
+        analysis: result.extractedData,
         pageCount: result.pageCount,
+        processingMethod: result.processingMethod,
         status: 'completed',
-        message: 'PDF analyzed successfully',
+        message: `PDF analyzed via ${result.processingMethod}`,
       });
 
       res.status(200).json({
@@ -111,12 +112,12 @@ router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
           fileName: document.fileName,
           fileSize: document.fileSize,
           pageCount: result.pageCount,
+          processingMethod: result.processingMethod,
           analysis: result.geminiAnalysis,
-          extractedText: result.extractedText.substring(0, 1000) + '...', // First 1000 chars
+          extractedText: result.extractedText.substring(0, 1000) + '...',
         },
       });
     } catch (processingError) {
-      // Update document with error status
       await Document.findByIdAndUpdate(document._id, {
         processingStatus: 'failed',
         errorMessage: processingError.message,
@@ -133,8 +134,7 @@ router.post('/analyze', requireAuth, upload.single('pdf'), async (req, res) => {
     }
   } catch (error) {
     console.error('PDF analysis error:', error);
-    
-    // Clean up uploaded file if exists
+
     if (req.file) {
       try {
         await fs.unlink(req.file.path);
@@ -165,7 +165,6 @@ router.post('/question/:id', requireAuth, async (req, res) => {
       });
     }
 
-    // Find the document
     const document = await Document.findOne({
       _id: req.params.id,
       userId: req.user.id,
@@ -192,7 +191,6 @@ router.post('/question/:id', requireAuth, async (req, res) => {
       });
     }
 
-    // Ask question using Gemini
     const answer = await askQuestionAboutPDF(document.ocrText, question);
 
     res.json({
@@ -213,15 +211,11 @@ router.post('/question/:id', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * GET /api/pdf/documents
- * Get all PDF documents for the authenticated user
- */
 router.get('/documents', requireAuth, async (req, res) => {
   try {
     const { status, limit = 50, page = 1 } = req.query;
 
-    const query = { 
+    const query = {
       userId: req.user.id,
       ...(req.user.hospitalId && { hospitalId: req.user.hospitalId })
     };
@@ -233,7 +227,7 @@ router.get('/documents', requireAuth, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
-      .select('-filePath -ocrText'); // Don't expose file path and full text
+      .select('-filePath -ocrText');
 
     const total = await Document.countDocuments(query);
 
@@ -258,10 +252,6 @@ router.get('/documents', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * GET /api/pdf/documents/:id
- * Get a specific PDF document with full analysis
- */
 router.get('/documents/:id', requireAuth, async (req, res) => {
   try {
     const document = await Document.findOne({
@@ -290,10 +280,6 @@ router.get('/documents/:id', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/pdf/documents/:id
- * Delete a PDF document
- */
 router.delete('/documents/:id', requireAuth, async (req, res) => {
   try {
     const document = await Document.findOne({
@@ -308,14 +294,12 @@ router.delete('/documents/:id', requireAuth, async (req, res) => {
       });
     }
 
-    // Delete the file from disk
     try {
       await fs.unlink(document.filePath);
     } catch (error) {
       console.error('Error deleting file:', error);
     }
 
-    // Delete from database
     await document.deleteOne();
 
     res.json({
